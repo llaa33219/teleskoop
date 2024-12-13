@@ -304,7 +304,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
             // playentry.org/signout
             if (urlObj.hostname === "playentry.org" && urlObj.pathname.includes("/signout")) {
-                resolve({ type: 'img', url: originalUrl });
+                resolve({ type: 'iframe', url: `https://playentry.org` });
                 return;
             }
 
