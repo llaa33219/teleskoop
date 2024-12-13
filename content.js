@@ -302,6 +302,12 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            // playentry.org/signout
+            if (urlObj.hostname === "playentry.org" && urlObj.pathname.includes("/signout")) {
+                resolve({ type: 'img', url: originalUrl });
+                return;
+            }
+
             // 그 외 도메인은 iframe 처리
             resolve({ type: 'iframe', url: originalUrl });
         });
