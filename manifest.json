@@ -1,6 +1,6 @@
 {
   "name": "망원경",
-  "version": "3.0",
+  "version": "4.0",
   "description": "엔트리 이야기에 링크 미리보기를 보여줍니다.",
   "manifest_version": 3,
   "permissions": [
@@ -9,7 +9,8 @@
   ],
   "host_permissions": [
     "https://ibb.co/*",
-    "https://postimg.cc/*"
+    "https://postimg.cc/*",
+    "<all_urls>"
   ],
   "declarative_net_request": {
     "rule_resources": [{

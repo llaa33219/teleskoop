@@ -47,7 +47,6 @@ function makeDomainRegex(domain) {
 const WHITELIST_DOMAINS = [
   "bloupla.net",
   "playentry.org",
-  "firebasestorage.googleapis.com",
   "ifh.cc",
   "i1fh.cc",
   "if1h.cc",
@@ -69,7 +68,8 @@ const WHITELIST_DOMAINS = [
   "ibb1.co",
   "ibb.1co",
   "ibb.c1o",
-  "snowman.quizby.me"
+  "snowman.quizby.me",
+  "www.miricanvas.com"
 ];
 
 // 화이트리스트 도메인을 정규식 패턴으로 변환
