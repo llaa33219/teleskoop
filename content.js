@@ -302,11 +302,11 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // playentry.org/signout
-            //if (urlObj.hostname === "playentry.org" && urlObj.pathname.includes("/signout")) {
-               // resolve({ type: 'iframe', url: `https://playentry.org` });
-               // return;
-            //}
+//           // playentry.org/signout
+//           if (urlObj.hostname === "playentry.org" && urlObj.pathname.includes("/signout")) {
+//               resolve({ type: 'iframe', url: `https://playentry.org` });
+//               return;
+//           }
 
             // 그 외 도메인은 iframe 처리
             resolve({ type: 'iframe', url: originalUrl });
@@ -338,16 +338,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         iframe.style.borderRadius = "8px";
         iframe.style.marginTop = "10px";
         iframe.style.backgroundColor = "#fff";
-    
-        // sandbox 속성으로 iframe 내부의 동작을 제한
-        // 필요에 따라 allow-scripts, allow-same-origin, allow-popups 등을 조정 가능
-        // 여기서는 스크립트 실행과 동일 출처 접근을 허용하지만 상위 문서 제어 등은 제한
-        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-    
-        // referrer 정책 강화
-        iframe.setAttribute('referrerpolicy', 'no-referrer');
-    
-        // iframe 로드 에러 처리
+
         iframe.addEventListener('error', () => {
             iframe.remove();
             const errorMsg = document.createElement('div');
@@ -361,10 +352,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             container.appendChild(errorMsg);
             container.dataset.previewDone = "true";
         });
-    
+
         container.appendChild(iframe);
         container.dataset.previewDone = "true";
-    }    
+    }
 
     function createImageElement(url, originalUrl, container) {
         const img = document.createElement('img');
