@@ -2,39 +2,37 @@
 if (window.location.href.startsWith("https://playentry.org/community/entrystory/")) {
     // 바꾸고자 하는 새 문구 및 글자 크기 설정
     const newText = "엔트리 이야기🔭";
-  
+
     function replaceTextAndStyle() {
-      const headers = document.querySelectorAll("h2");
-      let changed = false;
-      headers.forEach((header) => {
-        const text = header.textContent.trim();
-        if (text === "엔트리 이야기") {
-          header.textContent = newText;
-          changed = true;
-        }
-      });
-      return changed;
+        const headers = document.querySelectorAll("h2");
+        let changed = false;
+        headers.forEach((header) => {
+            const text = header.textContent.trim();
+            if (text === "엔트리 이야기") {
+                header.textContent = newText;
+                changed = true;
+            }
+        });
+        return changed;
     }
-  
+
     // 초기 시도
     let changed = replaceTextAndStyle();
-  
+
     // 아직 변경되지 않았다면 DOM 변화 관찰
     if (!changed) {
-      const observer = new MutationObserver(() => {
-        if (replaceTextAndStyle()) {
-          observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
-        }
-      });
-  
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
+        const observer = new MutationObserver(() => {
+            if (replaceTextAndStyle()) {
+                observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
-  }
-  
-  
+}
 
 (function() {
     const processedLinks = new Set(); 
@@ -79,6 +77,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (domain.endsWith("ibb.1co")) return "#50bcdf";
             if (domain.endsWith("ibb.c1o")) return "#50bcdf";
             if (domain.endsWith("snowman.quizby.me")) return "#D2E4F5";
+            if (domain.endsWith("quizby.me")) return "#E9E7E1";
             return "black";
         } catch (e) {
             return "black";
@@ -103,7 +102,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
         const container = document.createElement('div');
         container.style.width = "100%";
-        container.style.minHeight = "300px";
+        container.style.minHeight = "0px";
         container.setAttribute('data-url', url);
 
         linkElement.insertAdjacentElement('afterend', container);
@@ -127,28 +126,30 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         });
     }
 
-    function transformUrlIfNeeded(originalUrl) {
-        return new Promise((resolve) => {
-        // i1bb.co, ib1b.co, ibb1.co, ibb.1co, ibb.c1o, ibb.co 처리
-        // 이 모든 도메인을 발견하면 ibb.co로 통일하여 처리
-        let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o|ibb\.co)\/([^/]+)$/);
-        if (ibbMatch) {
-            const shortCode = ibbMatch[1];
-            
-            // 어떤 변형된 도메인이 들어와도 ibb.co로 변환
-            let apiUrl = originalUrl.replace(/(i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)/, 'ibb.co');
-            
-            chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (response) => {
-                if (response && response.success) {
-                    resolve({ type: 'img', url: response.imageUrl });
-                } else {
-                    resolve({ type: 'iframe', url: apiUrl });
-                }
-            });
-            return;
+    async function transformUrlIfNeeded(originalUrl) {
+        // 이미 embed 형태인지 먼저 확인
+        let alreadyEmbed = originalUrl.match(/https?:\/\/www\.youtube\.com\/embed\/([^?]+)/);
+        if (alreadyEmbed) {
+            // 이미 embed 형태라면 그대로 반환
+            return { type: 'iframe', url: originalUrl };
         }
 
-            // postimg.cc 처리
+        return new Promise((resolve) => {
+            // i1bb.co 등 처리
+            let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o|ibb\.co)\/([^/]+)$/);
+            if (ibbMatch) {
+                const shortCode = ibbMatch[1];
+                let apiUrl = originalUrl.replace(/(i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)/, 'ibb.co');
+                chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (response) => {
+                    if (response && response.success) {
+                        resolve({ type: 'img', url: response.imageUrl });
+                    } else {
+                        resolve({ type: 'iframe', url: apiUrl });
+                    }
+                });
+                return;
+            }
+
             let postimgMatch = originalUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
             if (postimgMatch) {
                 const shortCode = postimgMatch[1];
@@ -162,7 +163,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // bloupla.net/img/?=... 패턴
             let blouplaMatch = originalUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
             if (blouplaMatch) {
                 const randomString = blouplaMatch[1]; 
@@ -173,7 +173,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // ifh.cc 계열 변환 (v-... -> g/...)
+            // ifh.cc 계열 변환 (v-...)
             let ifhMatch = originalUrl.match(/https?:\/\/ifh\.cc\/v-(.+)$/);
             if (ifhMatch) {
                 const randomString = ifhMatch[1]; 
@@ -216,7 +216,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // ifh.cc 계열 변환 (v-... -> g/...)
+            // ifh.cc 계열 변환 (i-...)
             let iifhMatch = originalUrl.match(/https?:\/\/ifh\.cc\/i-(.+)$/);
             if (iifhMatch) {
                 const randomString = iifhMatch[1]; 
@@ -259,7 +259,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // lemmy.sdf.org/pictrs/image/...
             let sdfMatch = originalUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
             if (sdfMatch) {
                 const randomString = sdfMatch[1];
@@ -267,7 +266,13 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // baboboximg.onrender.com
+            let imgnewsMatch = originalUrl.match(/^https?:\/\/imgnews\.pstatic\.net\/image\/(.+)/);
+            if (imgnewsMatch) {
+                const randomString = imgnewsMatch[1];
+                resolve({ type: 'img', url: `https://imgnews.pstatic.net/image/${randomString}` });
+                return;
+            }
+
             let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
             if (baboboxMatch) {
                 const randomString = baboboxMatch[1]; 
@@ -275,23 +280,19 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // i.postimg.cc 직접 이미지
             const urlObj = new URL(originalUrl);
 
             if (urlObj.hostname === "ifh.cc") {
-                // ifh.cc 직접 이미지 링크
                 resolve({ type: 'img', url: originalUrl });
                 return;
             }
 
             if (urlObj.hostname === "i.postimg.cc") {
-                // i.postimg.cc 직접 이미지
                 resolve({ type: 'img', url: originalUrl });
                 return;
             }
 
             if (urlObj.hostname === "i.ibb.co") {
-                // i.ibb.co 직접 이미지
                 resolve({ type: 'img', url: originalUrl });
                 return;
             }
@@ -302,11 +303,37 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-//           // playentry.org/signout
-//           if (urlObj.hostname === "playentry.org" && urlObj.pathname.includes("/signout")) {
-//               resolve({ type: 'iframe', url: `https://playentry.org` });
-//               return;
-//           }
+            // space.playentry.org/world/ 처리
+            let spaceMatch = originalUrl.match(/https?:\/\/space\.playentry\.org\/world\/([^/]+)\/([^/]+)$/);
+            if (spaceMatch) {
+                const firstPart = spaceMatch[1]; 
+                resolve({ type: 'iframe', url: `https://space.playentry.org/world/${firstPart}` });
+                return;
+            }
+
+            // 유튜브 watch
+            let youtubeMatch = originalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+            if (youtubeMatch) {
+                const videoId = youtubeMatch[1];
+                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                return;
+            }
+
+            // 유튜브 단축링크
+            let youtubeShortMatch = originalUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
+            if (youtubeShortMatch) {
+                const videoId = youtubeShortMatch[1];
+                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                return;
+            }
+
+            // streamable
+            let streamableMatch = originalUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
+            if (streamableMatch) {
+                const videoId = streamableMatch[1]; 
+                resolve({ type: 'iframe', url: `https://streamable.com/e/${videoId}` });
+                return;
+            }
 
             // 그 외 도메인은 iframe 처리
             resolve({ type: 'iframe', url: originalUrl });
@@ -331,14 +358,22 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     function createIframeElement(url, originalUrl, container) {
         const iframe = document.createElement("iframe");
         iframe.setAttribute('data-preview-iframe', 'true');
-        iframe.src = url;
+        iframe.src = url; 
         iframe.style.width = "99%";
         iframe.style.height = "400px";
         iframe.style.border = `2px solid ${getBorderColor(originalUrl)}`;
         iframe.style.borderRadius = "8px";
         iframe.style.marginTop = "10px";
         iframe.style.backgroundColor = "#fff";
-
+        
+        // Set attributes using setAttribute for proper HTML compliance
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allowfullscreen', '');
+        // The 'allow' attribute is often used for YouTube-specific features,
+        // but can be left out or simplified for streamable if needed.
+        // If you still want to allow autoplay, you may leave it as is:
+        iframe.setAttribute('allow', 'autoplay; encrypted-media');
+        
         iframe.addEventListener('error', () => {
             iframe.remove();
             const errorMsg = document.createElement('div');
@@ -352,10 +387,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             container.appendChild(errorMsg);
             container.dataset.previewDone = "true";
         });
-
+    
         container.appendChild(iframe);
         container.dataset.previewDone = "true";
-    }
+    }    
 
     function createImageElement(url, originalUrl, container) {
         const img = document.createElement('img');
@@ -410,23 +445,28 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             const originalUrl = container.getAttribute('data-url');
             const visible = isInViewport(container);
 
-            let element = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
-
-            if (!visible) {
-                if (element) {
-                    element.style.display = "none";
+            // 이미 변환 완료라면 재시도 안함
+            if (container.dataset.previewDone === "true") {
+                let element = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
+                if (element && visible) {
+                    element.style.display = "block";
                 }
                 continue;
             }
 
-            if (container.dataset.previewDone === "true") {
-                if (element) element.style.display = "block";
+            if (!visible) {
+                // 아직 변환 안됐고 뷰포트 밖이면 패스
                 continue;
             }
 
+            // URL 변환 실행
             const { type, url } = await transformUrlIfNeeded(originalUrl);
+            // 변환된 url을 container에 다시 저장 -> 중복 변환 방지
+            container.setAttribute('data-url', url);
 
+            const element = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
             if (!element) {
+                // 새로 만든다
                 if (type === 'img') {
                     createImageElement(url, originalUrl, container);
                 } else if (type === 'video') {
@@ -435,7 +475,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     createIframeElement(url, originalUrl, container);
                 }
             } else {
+                // 이미 존재하는 경우 (드물겠지만)
                 element.style.display = "block";
+                container.dataset.previewDone = "true";
             }
         }
     }
