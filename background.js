@@ -76,7 +76,8 @@ const WHITELIST_DOMAINS = [
   "imgnews.pstatic.net",
   "www.youtube-nocookie.com",
   "quizby.me",
-  "streamable.com"
+  "streamable.com",
+  "dutmoticon.tica.fun"
 ];
 
 // 화이트리스트 도메인을 정규식 패턴으로 변환
@@ -85,9 +86,8 @@ const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(domain => makeDomainRegex(domai
 // 블랙리스트 패턴: 화이트리스트 중 특정 경로 다시 차단
 // 예: playentry.org/signout 경로를 차단하려면:
 const BLACKLIST_PATTERNS = [
-  "^https://playentry\\.org/signout(/|$)",
-  "^https?://ncc\.playentry\.org/signout($|[/?#])"
-
+  "^https://playentry\\.org/signout.*",
+  "^https?://ncc\\.playentry\\.org/signout.*"
 ];
 
 chrome.runtime.onInstalled.addListener(() => {
