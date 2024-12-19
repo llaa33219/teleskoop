@@ -84,7 +84,6 @@ const WHITELIST_DOMAINS = [
 const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(domain => makeDomainRegex(domain));
 
 // 블랙리스트 패턴: 화이트리스트 중 특정 경로 다시 차단
-// 예: playentry.org/signout 경로를 차단하려면:
 const BLACKLIST_PATTERNS = [
   "^https://playentry\\.org/signout.*",
   "^https?://ncc\\.playentry\\.org/signout.*"
@@ -97,7 +96,8 @@ chrome.runtime.onInstalled.addListener(() => {
     priority: 1,
     action: { type: "block" },
     condition: {
-      resourceTypes: ["sub_frame"]
+      resourceTypes: ["sub_frame"],
+      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
     }
   };
 
@@ -108,19 +108,20 @@ chrome.runtime.onInstalled.addListener(() => {
     action: { type: "allow" },
     condition: {
       resourceTypes: ["sub_frame"],
-      regexFilter: pattern
+      regexFilter: pattern,
+      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
     }
   }));
 
   // 3. 블랙리스트 규칙 (우선순위 3)
-  // 화이트리스트에 해당하는 iframe이라도 여기서 특정 경로는 다시 차단
   const blacklistRules = BLACKLIST_PATTERNS.map((pattern, index) => ({
     id: 1000 + index,
     priority: 3,
     action: { type: "block" },
     condition: {
       resourceTypes: ["sub_frame"],
-      regexFilter: pattern
+      regexFilter: pattern,
+      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
     }
   }));
 
@@ -130,6 +131,6 @@ chrome.runtime.onInstalled.addListener(() => {
     removeRuleIds: allRuleIds,
     addRules: [blockAllIframesRule, ...allowRules, ...blacklistRules]
   }, () => {
-    console.log("iframe 차단/허용 룰 적용 완료");
+    console.log("iframe 차단/허용 룰 적용 완료 (playentry.org에서만 동작)");
   });
 });

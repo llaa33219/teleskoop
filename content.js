@@ -319,6 +319,14 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            // YouTube Shorts URL
+            let youtubeShortsMatch = originalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
+            if (youtubeShortsMatch) {
+                const videoId = youtubeShortsMatch[1];
+                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                return;
+            }
+
             // 유튜브 단축링크
             let youtubeShortMatch = originalUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
             if (youtubeShortMatch) {
