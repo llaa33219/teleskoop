@@ -77,7 +77,9 @@ const WHITELIST_DOMAINS = [
   "www.youtube-nocookie.com",
   "quizby.me",
   "streamable.com",
-  "dutmoticon.tica.fun"
+  "dutmoticon.tica.fun",
+  "musiclab.chromeexperiments.com",
+  "bbbi.onrender.com"
 ];
 
 // 화이트리스트 도메인을 정규식 패턴으로 변환

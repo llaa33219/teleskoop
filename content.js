@@ -273,10 +273,18 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            //바보상자의 이전 링크크
             let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
             if (baboboxMatch) {
                 const randomString = baboboxMatch[1]; 
                 resolve({ type: 'img', url: `https://baboboximg.onrender.com/images/${randomString}` });
+                return;
+            }
+
+            let bbbiMatch = originalUrl.match(/https?:\/\/bbbi\.onrender\.com\/v\?f=(.+)$/);
+            if (bbbiMatch) {
+                const randomString = bbbiMatch[1]; 
+                resolve({ type: 'img', url: `https://bbbi.onrender.com/images/${randomString}` });
                 return;
             }
 
