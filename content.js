@@ -108,24 +108,14 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         linkElement.insertAdjacentElement('afterend', container);
     }
 
-    function convertTextLinksToAnchor(element) {
-        element.childNodes.forEach((node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent;
-                if (urlRegex.test(text)) {
-                    const replacedHTML = text.replace(urlRegex, (match) => {
-                        return `<a href="${match}" target="_blank" rel="noopener noreferrer">${match}</a>`;
-                    });
-                    const span = document.createElement('span');
-                    span.innerHTML = replacedHTML;
-                    node.replaceWith(span);
-                }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                convertTextLinksToAnchor(node);
-            }
-        });
-    }
+    // ─────────────────────────────────────────────────────────────────────────────
+    // convertTextLinksToAnchor 함수는 더 이상 사용하지 않으므로 제거/비활성화
+    // ─────────────────────────────────────────────────────────────────────────────
+    // function convertTextLinksToAnchor(element) {
+    //     ...
+    // }
 
+    // URL 변환 로직
     async function transformUrlIfNeeded(originalUrl) {
         // 이미 embed 형태인지 먼저 확인
         let alreadyEmbed = originalUrl.match(/https?:\/\/www\.youtube\.com\/embed\/([^?]+)/);
@@ -136,7 +126,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
         return new Promise((resolve) => {
             // i1bb.co 등 처리
-            let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o|ibb\.co)\/([^/]+)$/);
+            let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)\/([^/]+)$/);
             if (ibbMatch) {
                 const shortCode = ibbMatch[1];
                 let apiUrl = originalUrl.replace(/(i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)/, 'ibb.co');
@@ -273,7 +263,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            //바보상자의 이전 링크크
+            //바보상자의 이전 링크
             let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
             if (baboboxMatch) {
                 const randomString = baboboxMatch[1]; 
@@ -382,12 +372,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         iframe.style.marginTop = "10px";
         iframe.style.backgroundColor = "#fff";
         
-        // Set attributes using setAttribute for proper HTML compliance
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
-        // The 'allow' attribute is often used for YouTube-specific features,
-        // but can be left out or simplified for streamable if needed.
-        // If you still want to allow autoplay, you may leave it as is:
         iframe.setAttribute('allow', 'autoplay; encrypted-media');
         
         iframe.addEventListener('error', () => {
@@ -440,16 +426,18 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     }
 
     async function processPosts() {
-        const posts = document.querySelectorAll(".css-sy8ihv.e1i41bku1");
+        // 게시물(혹은 댓글 등) 요소들을 찾습니다.
+        const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
         posts.forEach(post => {
             if (!post.dataset.converted) {
-                convertTextLinksToAnchor(post);
                 post.dataset.converted = "true";
 
+                // 여기서 a 태그를 찾고, href와 textContent가 같은 경우만 처리
                 const links = post.querySelectorAll("a[href]");
                 links.forEach(link => {
                     const href = link.getAttribute('href');
-                    if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
+                    // href도 존재하고 텍스트도 존재해야 함
+                    if (href && link.textContent.trim() === href.trim()) {
                         insertPreviewContainer(link);
                     }
                 });
@@ -461,7 +449,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             const originalUrl = container.getAttribute('data-url');
             const visible = isInViewport(container);
 
-            // 이미 변환 완료라면 재시도 안함
+            // 이미 변환 완료라면 재시도 안 함
             if (container.dataset.previewDone === "true") {
                 let element = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
                 if (element && visible) {
@@ -471,7 +459,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             }
 
             if (!visible) {
-                // 아직 변환 안됐고 뷰포트 밖이면 패스
+                // 아직 변환 안 됐고 뷰포트 밖이면 패스
                 continue;
             }
 
@@ -491,13 +479,14 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     createIframeElement(url, originalUrl, container);
                 }
             } else {
-                // 이미 존재하는 경우 (드물겠지만)
+                // 이미 존재하는 경우 (매우 드물긴 함)
                 element.style.display = "block";
                 container.dataset.previewDone = "true";
             }
         }
     }
 
+    // 0.5초 간격으로 게시물 내부를 탐색하여 새로 추가된 a 태그 등을 업데이트
     setInterval(() => {
         processPosts();
     }, 500);
