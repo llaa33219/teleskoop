@@ -1,39 +1,3 @@
-// 현재 페이지가 목표하는 URL인지 판별
-if (window.location.href.startsWith("https://playentry.org/community/entrystory/")) {
-    // 바꾸고자 하는 새 문구 및 글자 크기 설정
-    const newText = "엔트리 이야기🔭";
-
-    function replaceTextAndStyle() {
-        const headers = document.querySelectorAll("h2");
-        let changed = false;
-        headers.forEach((header) => {
-            const text = header.textContent.trim();
-            if (text === "엔트리 이야기") {
-                header.textContent = newText;
-                changed = true;
-            }
-        });
-        return changed;
-    }
-
-    // 초기 시도
-    let changed = replaceTextAndStyle();
-
-    // 아직 변경되지 않았다면 DOM 변화 관찰
-    if (!changed) {
-        const observer = new MutationObserver(() => {
-            if (replaceTextAndStyle()) {
-                observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
-}
-
 (function() {
     const processedLinks = new Set(); 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -47,6 +11,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         }
     }, true);
 
+    /**
+     * 도메인별 테두리 색상 반환
+     */
     function getBorderColor(url) {
         try {
             const u = new URL(url);
@@ -84,6 +51,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         }
     }
 
+    /**
+     * 요소가 현재 뷰포트 내에 있는지 판별
+     */
     function isInViewport(element) {
         const rect = element.getBoundingClientRect();
         return (
@@ -94,28 +64,30 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         );
     }
 
-    function insertPreviewContainer(linkElement) {
-        const url = linkElement.href;
-        if (!url || processedLinks.has(url)) return;
+    /**
+     * 미리보기 컨테이너를 a 태그 바로 뒤에 삽입
+     * @param {HTMLAnchorElement} linkElement 
+     * @param {string} finalUrl 실제 미리보기 처리에 사용될 최종 URL
+     */
+    function insertPreviewContainer(linkElement, finalUrl) {
+        // 이미 처리했으면 중복 삽입 X
+        if (!finalUrl || processedLinks.has(finalUrl)) return;
 
-        processedLinks.add(url);
+        processedLinks.add(finalUrl);
 
+        // 컨테이너 생성
         const container = document.createElement('div');
         container.style.width = "100%";
         container.style.minHeight = "0px";
-        container.setAttribute('data-url', url);
+        container.setAttribute('data-url', finalUrl);
 
+        // a 태그 바로 뒤에 삽입
         linkElement.insertAdjacentElement('afterend', container);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // convertTextLinksToAnchor 함수는 더 이상 사용하지 않으므로 제거/비활성화
-    // ─────────────────────────────────────────────────────────────────────────────
-    // function convertTextLinksToAnchor(element) {
-    //     ...
-    // }
-
-    // URL 변환 로직
+    /**
+     * URL 변환 로직
+     */
     async function transformUrlIfNeeded(originalUrl) {
         // 이미 embed 형태인지 먼저 확인
         let alreadyEmbed = originalUrl.match(/https?:\/\/www\.youtube\.com\/embed\/([^?]+)/);
@@ -263,7 +235,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            //바보상자의 이전 링크
+            // 바보상자의 이전 링크
             let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
             if (baboboxMatch) {
                 const randomString = baboboxMatch[1]; 
@@ -346,6 +318,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         });
     }
 
+    /**
+     * 동영상 태그 생성
+     */
     function createVideoElement(url, originalUrl, container) {
         const video = document.createElement('video');
         video.setAttribute('data-preview-video', 'true');
@@ -361,6 +336,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         container.dataset.previewDone = "true";
     }
 
+    /**
+     * 아이프레임 태그 생성
+     */
     function createIframeElement(url, originalUrl, container) {
         const iframe = document.createElement("iframe");
         iframe.setAttribute('data-preview-iframe', 'true');
@@ -392,8 +370,11 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     
         container.appendChild(iframe);
         container.dataset.previewDone = "true";
-    }    
+    }
 
+    /**
+     * 이미지 태그 생성
+     */
     function createImageElement(url, originalUrl, container) {
         const img = document.createElement('img');
         img.setAttribute('data-preview-img', 'true');
@@ -425,6 +406,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         container.appendChild(img);
     }
 
+    /**
+     * 실제로 게시물 내부의 링크들을 순회하며 컨테이너를 삽입하고,
+     * 컨테이너가 뷰포트에 들어오면 URL 변환/미리보기 태그를 생성
+     */
     async function processPosts() {
         // 게시물(혹은 댓글 등) 요소들을 찾습니다.
         const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
@@ -432,18 +417,38 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (!post.dataset.converted) {
                 post.dataset.converted = "true";
 
-                // 여기서 a 태그를 찾고, href와 textContent가 같은 경우만 처리
+                // 여기서 a 태그를 찾고
                 const links = post.querySelectorAll("a[href]");
                 links.forEach(link => {
                     const href = link.getAttribute('href');
-                    // href도 존재하고 텍스트도 존재해야 함
-                    if (href && link.textContent.trim() === href.trim()) {
-                        insertPreviewContainer(link);
+                    // href가 존재하고 a태그의 텍스트가 1글자 이상이면
+                    if (href && link.textContent.trim() !== '') {
+                        // /redirect?external=(도메인) 구조라면 (도메인) 부분만 추출
+                        // 예: href="/redirect?external=https://example.com"
+                        const redirectMatch = href.match(/^\/redirect\?external=(.+)$/);
+                        let finalUrl = null;
+
+                        if (redirectMatch) {
+                            try {
+                                // 혹시 인코딩되어 있다면 decode
+                                finalUrl = decodeURIComponent(redirectMatch[1]);
+                            } catch {
+                                finalUrl = redirectMatch[1];
+                            }
+                        } else {
+                            finalUrl = href;
+                        }
+
+                        // 최종 URL이 http:// 또는 https:// 로 시작하면 미리보기 컨테이너 생성
+                        if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+                            insertPreviewContainer(link, finalUrl);
+                        }
                     }
                 });
             }
         });
 
+        // 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행
         const containers = document.querySelectorAll('div[data-url]');
         for (const container of containers) {
             const originalUrl = container.getAttribute('data-url');
