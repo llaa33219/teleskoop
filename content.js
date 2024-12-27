@@ -1,3 +1,39 @@
+// content.js
+if (window.location.href.startsWith("https://playentry.org/community/entrystory/")) {
+    // 바꾸고자 하는 새 문구 및 글자 크기 설정
+    const newText = "엔트리 이야기🔭";
+  
+    function replaceTextAndStyle() {
+      const headers = document.querySelectorAll("h2");
+      let changed = false;
+      headers.forEach((header) => {
+        const text = header.textContent.trim();
+        if (text === "엔트리 이야기") {
+          header.textContent = newText;
+          changed = true;
+        }
+      });
+      return changed;
+    }
+  
+    // 초기 시도
+    let changed = replaceTextAndStyle();
+  
+    // 아직 변경되지 않았다면 DOM 변화 관찰
+    if (!changed) {
+      const observer = new MutationObserver(() => {
+        if (replaceTextAndStyle()) {
+          observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
+        }
+      });
+  
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
+}
+
 (function() {
     const processedLinks = new Set(); 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -135,86 +171,95 @@
                 return;
             }
 
-            // ifh.cc 계열 변환 (v-...)
-            let ifhMatch = originalUrl.match(/https?:\/\/ifh\.cc\/v-(.+)$/);
-            if (ifhMatch) {
-                const randomString = ifhMatch[1]; 
-                resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
-                return;
+            // ─────────────────────────────────────────────────
+            // ifh.cc (및 하위 패스) 처리 (정규식 대신 hostname 체크)
+            // ─────────────────────────────────────────────────
+            const urlObj = new URL(originalUrl);
+
+            // ifh.cc 도메인 → /v-XXXX or /i-XXXX → https://ifh.cc/g/XXXX
+            if (urlObj.hostname === "ifh.cc") {
+                const path = urlObj.pathname;  // 예: /v-xxxxx, /i-xxxxx, ...
+                if (path.startsWith("/v-")) {
+                    const randomString = path.slice(3); // /v- 제거
+                    resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
+                    return;
+                } else if (path.startsWith("/i-")) {
+                    const randomString = path.slice(3); // /i- 제거
+                    resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
+                    return;
+                } else {
+                    // 그 외 경로는 그대로 사용
+                    resolve({ type: 'img', url: originalUrl });
+                    return;
+                }
             }
 
-            let ifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/v-(.+)$/);
+            // ifh1.cc 등 변형 도메인들
+            let ifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/v-([^/?#]+)/);
             if (ifh1Match) {
                 const randomString = ifh1Match[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let if1hMatch = originalUrl.match(/https?:\/\/if1h\.cc\/v-(.+)$/);
+            let if1hMatch = originalUrl.match(/https?:\/\/if1h\.cc\/v-([^/?#]+)/);
             if (if1hMatch) {
                 const randomString = if1hMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let i1fhMatch = originalUrl.match(/https?:\/\/i1fh\.cc\/v-(.+)$/);
+            let i1fhMatch = originalUrl.match(/https?:\/\/i1fh\.cc\/v-([^/?#]+)/);
             if (i1fhMatch) {
                 const randomString = i1fhMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let ifhc1cMatch = originalUrl.match(/https?:\/\/ifh\.c1c\/v-(.+)$/);
+            let ifhc1cMatch = originalUrl.match(/https?:\/\/ifh\.c1c\/v-([^/?#]+)/);
             if (ifhc1cMatch) {
                 const randomString = ifhc1cMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let ifh1ccMatch = originalUrl.match(/https?:\/\/ifh\.1cc\/v-(.+)$/);
+            let ifh1ccMatch = originalUrl.match(/https?:\/\/ifh\.1cc\/v-([^/?#]+)/);
             if (ifh1ccMatch) {
                 const randomString = ifh1ccMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            // ifh.cc 계열 변환 (i-...)
-            let iifhMatch = originalUrl.match(/https?:\/\/ifh\.cc\/i-(.+)$/);
-            if (iifhMatch) {
-                const randomString = iifhMatch[1]; 
-                resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
-                return;
-            }
-
-            let iifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/i-(.+)$/);
+            // ifh.cc 계열 (i-...)
+            let iifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/i-([^/?#]+)/);
             if (iifh1Match) {
                 const randomString = iifh1Match[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let iif1hMatch = originalUrl.match(/https?:\/\/if1h\.cc\/i-(.+)$/);
+            let iif1hMatch = originalUrl.match(/https?:\/\/if1h\.cc\/i-([^/?#]+)/);
             if (iif1hMatch) {
                 const randomString = iif1hMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let ii1fhMatch = originalUrl.match(/https?:\/\/i1fh\.cc\/i-(.+)$/);
+            let ii1fhMatch = originalUrl.match(/https?:\/\/i1fh\.cc\/i-([^/?#]+)/);
             if (ii1fhMatch) {
                 const randomString = ii1fhMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let iifhc1cMatch = originalUrl.match(/https?:\/\/ifh\.c1c\/i-(.+)$/);
+            let iifhc1cMatch = originalUrl.match(/https?:\/\/ifh\.c1c\/i-([^/?#]+)/);
             if (iifhc1cMatch) {
                 const randomString = iifhc1cMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                 return;
             }
 
-            let iifh1ccMatch = originalUrl.match(/https?:\/\/ifh\.1cc\/i-(.+)$/);
+            let iifh1ccMatch = originalUrl.match(/https?:\/\/ifh\.1cc\/i-([^/?#]+)/);
             if (iifh1ccMatch) {
                 const randomString = iifh1ccMatch[1]; 
                 resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
@@ -247,23 +292,6 @@
             if (bbbiMatch) {
                 const randomString = bbbiMatch[1]; 
                 resolve({ type: 'img', url: `https://bbbi.onrender.com/images/${randomString}` });
-                return;
-            }
-
-            const urlObj = new URL(originalUrl);
-
-            if (urlObj.hostname === "ifh.cc") {
-                resolve({ type: 'img', url: originalUrl });
-                return;
-            }
-
-            if (urlObj.hostname === "i.postimg.cc") {
-                resolve({ type: 'img', url: originalUrl });
-                return;
-            }
-
-            if (urlObj.hostname === "i.ibb.co") {
-                resolve({ type: 'img', url: originalUrl });
                 return;
             }
 
@@ -417,32 +445,35 @@
             if (!post.dataset.converted) {
                 post.dataset.converted = "true";
 
-                // 여기서 a 태그를 찾고
+                // 여기서 a 태그를 찾음
                 const links = post.querySelectorAll("a[href]");
                 links.forEach(link => {
-                    const href = link.getAttribute('href');
-                    // href가 존재하고 a태그의 텍스트가 1글자 이상이면
-                    if (href && link.textContent.trim() !== '') {
-                        // /redirect?external=(도메인) 구조라면 (도메인) 부분만 추출
-                        // 예: href="/redirect?external=https://example.com"
-                        const redirectMatch = href.match(/^\/redirect\?external=(.+)$/);
-                        let finalUrl = null;
+                    // 방어 코드: link 혹은 href 없으면 패스
+                    if (!link || !link.hasAttribute('href')) {
+                        return;
+                    }
+                    const hrefValue = link.getAttribute('href');
+                    if (!hrefValue) {
+                        return; 
+                    }
 
-                        if (redirectMatch) {
-                            try {
-                                // 혹시 인코딩되어 있다면 decode
-                                finalUrl = decodeURIComponent(redirectMatch[1]);
-                            } catch {
-                                finalUrl = redirectMatch[1];
-                            }
-                        } else {
-                            finalUrl = href;
-                        }
+                    // /redirect?external=(도메인) 구조라면 (도메인) 부분만 추출
+                    const redirectMatch = hrefValue.match(/^\/redirect\?external=(.+)$/);
+                    let finalUrl = null;
 
-                        // 최종 URL이 http:// 또는 https:// 로 시작하면 미리보기 컨테이너 생성
-                        if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
-                            insertPreviewContainer(link, finalUrl);
+                    if (redirectMatch) {
+                        try {
+                            finalUrl = decodeURIComponent(redirectMatch[1]);
+                        } catch {
+                            finalUrl = redirectMatch[1];
                         }
+                    } else {
+                        finalUrl = hrefValue;
+                    }
+
+                    // 최종 URL이 http:// 또는 https:// 로 시작하면 미리보기 컨테이너 생성
+                    if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+                        insertPreviewContainer(link, finalUrl);
                     }
                 });
             }
@@ -463,19 +494,20 @@
                 continue;
             }
 
+            // 뷰포트 밖이면 처리 안 함
             if (!visible) {
-                // 아직 변환 안 됐고 뷰포트 밖이면 패스
                 continue;
             }
 
             // URL 변환 실행
             const { type, url } = await transformUrlIfNeeded(originalUrl);
+
             // 변환된 url을 container에 다시 저장 -> 중복 변환 방지
             container.setAttribute('data-url', url);
 
-            const element = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
-            if (!element) {
-                // 새로 만든다
+            const existingElement = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
+            if (!existingElement) {
+                // 새로 생성
                 if (type === 'img') {
                     createImageElement(url, originalUrl, container);
                 } else if (type === 'video') {
@@ -484,14 +516,14 @@
                     createIframeElement(url, originalUrl, container);
                 }
             } else {
-                // 이미 존재하는 경우 (매우 드물긴 함)
-                element.style.display = "block";
+                // 이미 존재할 경우
+                existingElement.style.display = "block";
                 container.dataset.previewDone = "true";
             }
         }
     }
 
-    // 0.5초 간격으로 게시물 내부를 탐색하여 새로 추가된 a 태그 등을 업데이트
+    // 일정 간격으로 게시물 내부를 탐색하여 새로 추가된 a 태그 등을 업데이트
     setInterval(() => {
         processPosts();
     }, 500);
