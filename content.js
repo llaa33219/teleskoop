@@ -2,35 +2,35 @@
 if (window.location.href.startsWith("https://playentry.org/community/entrystory/")) {
     // 바꾸고자 하는 새 문구 및 글자 크기 설정
     const newText = "엔트리 이야기🔭";
-  
+
     function replaceTextAndStyle() {
-      const headers = document.querySelectorAll("h2");
-      let changed = false;
-      headers.forEach((header) => {
-        const text = header.textContent.trim();
-        if (text === "엔트리 이야기") {
-          header.textContent = newText;
-          changed = true;
-        }
-      });
-      return changed;
+        const headers = document.querySelectorAll("h2");
+        let changed = false;
+        headers.forEach((header) => {
+            const text = header.textContent.trim();
+            if (text === "엔트리 이야기") {
+                header.textContent = newText;
+                changed = true;
+            }
+        });
+        return changed;
     }
-  
+
     // 초기 시도
     let changed = replaceTextAndStyle();
-  
+
     // 아직 변경되지 않았다면 DOM 변화 관찰
     if (!changed) {
-      const observer = new MutationObserver(() => {
-        if (replaceTextAndStyle()) {
-          observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
-        }
-      });
-  
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
+        const observer = new MutationObserver(() => {
+            if (replaceTextAndStyle()) {
+                observer.disconnect(); // 목표 텍스트 발견 및 변경 후 관찰 중단
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 }
 
@@ -133,7 +133,29 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         }
 
         return new Promise((resolve) => {
-            // i1bb.co 등 처리
+            const urlObj = new URL(originalUrl);
+
+            // ─────────────────────────────────────────
+            // 1) 호스트가 정확히 ibb.co 인 경우만 체크
+            // ─────────────────────────────────────────
+            if (urlObj.hostname === "ibb.co") {
+                // 예: https://ibb.co/xxxxx
+                // pathname(예: "/xxxxx")에서 맨 앞 슬래시 제거
+                const shortCode = urlObj.pathname.substring(1);
+                // ibb.co 도메인은 getIbbImage -> 성공 시 이미지, 실패 시 iframe
+                chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (response) => {
+                    if (response && response.success) {
+                        resolve({ type: 'img', url: response.imageUrl });
+                    } else {
+                        resolve({ type: 'iframe', url: originalUrl });
+                    }
+                });
+                return;
+            }
+
+            // ─────────────────────────────────────────
+            // 2) 나머지 i1bb.co, ib1b.co, ibb1.co, ibb.1co, ibb.c1o → 이전 정규식 매칭 그대로
+            // ─────────────────────────────────────────
             let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)\/([^/]+)$/);
             if (ibbMatch) {
                 const shortCode = ibbMatch[1];
@@ -148,6 +170,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            // 3) postimg.cc
             let postimgMatch = originalUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
             if (postimgMatch) {
                 const shortCode = postimgMatch[1];
@@ -161,6 +184,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            // 4) bloupla.net
             let blouplaMatch = originalUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
             if (blouplaMatch) {
                 const randomString = blouplaMatch[1]; 
@@ -171,20 +195,15 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // ─────────────────────────────────────────────────
-            // ifh.cc (및 하위 패스) 처리 (정규식 대신 hostname 체크)
-            // ─────────────────────────────────────────────────
-            const urlObj = new URL(originalUrl);
-
-            // ifh.cc 도메인 → /v-XXXX or /i-XXXX → https://ifh.cc/g/XXXX
+            // 5) ifh.cc (및 변형 도메인)
             if (urlObj.hostname === "ifh.cc") {
-                const path = urlObj.pathname;  // 예: /v-xxxxx, /i-xxxxx, ...
+                const path = urlObj.pathname;  
                 if (path.startsWith("/v-")) {
-                    const randomString = path.slice(3); // /v- 제거
+                    const randomString = path.slice(3);
                     resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                     return;
                 } else if (path.startsWith("/i-")) {
-                    const randomString = path.slice(3); // /i- 제거
+                    const randomString = path.slice(3);
                     resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
                     return;
                 } else {
@@ -194,7 +213,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 }
             }
 
-            // ifh1.cc 등 변형 도메인들
             let ifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/v-([^/?#]+)/);
             if (ifh1Match) {
                 const randomString = ifh1Match[1]; 
@@ -230,7 +248,19 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // ifh.cc 계열 (i-...)
+            // ifh.cc 계열 (i-...) 
+            if (urlObj.hostname === "ifh.cc") {
+                const path = urlObj.pathname;  
+                if (path.startsWith("/i-")) {
+                    const randomString = path.slice(3); 
+                    resolve({ type: 'img', url: `https://ifh.cc/g/${randomString}` });
+                    return;
+                } else {
+                    resolve({ type: 'img', url: originalUrl });
+                    return;
+                }
+            }
+
             let iifh1Match = originalUrl.match(/https?:\/\/ifh1\.cc\/i-([^/?#]+)/);
             if (iifh1Match) {
                 const randomString = iifh1Match[1]; 
@@ -266,6 +296,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
+            // 6) 기타 이미지 도메인들
             let sdfMatch = originalUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
             if (sdfMatch) {
                 const randomString = sdfMatch[1];
@@ -280,7 +311,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // 바보상자의 이전 링크
+            // 바보상자 onrender
             let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
             if (baboboxMatch) {
                 const randomString = baboboxMatch[1]; 
@@ -317,7 +348,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 return;
             }
 
-            // YouTube Shorts URL
+            // YouTube Shorts
             let youtubeShortsMatch = originalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
             if (youtubeShortsMatch) {
                 const videoId = youtubeShortsMatch[1];
