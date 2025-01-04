@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'getIbbImage') {
-      const shortCode = message.shortCode;
+  if (message.action === 'getIbbImage') {
+    const shortCode = message.shortCode;
       fetch(`https://ibb.co/${shortCode}`)
         .then(r => r.text())
         .then(html => {
@@ -34,7 +34,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       return true;
     }
-  });
+  
+    // **추가**: postimg 갤러리 처리
+    if (message.action === 'getPostimgGallery') {
+      const shortCode = message.shortCode;
+      // 갤러리 페이지 HTML 요청
+      fetch(`https://postimg.cc/gallery/${shortCode}`)
+        .then(r => r.text())
+        .then(html => {
+          // (1) background-image:url('...') 추출용 정규식
+          //     style="....background-image:url('https://i.postimg.cc/...')..."
+          const bgImageRegex = /background-image\s*:\s*url\('([^']+)'\)/g;
+          let match;
+          const imageUrls = [];
+  
+          // (2) 계속 exec()로 돌면서 모든 background-image URL을 찾는다
+          while ((match = bgImageRegex.exec(html)) !== null) {
+            const foundUrl = match[1];
+            // 예: "https://i.postimg.cc/pmf5D5Jg/Copy-2.png"
+            // 필터링이 필요하다면 추가 검사
+            if (foundUrl.startsWith("https://i.postimg.cc/")) {
+              imageUrls.push(foundUrl);
+            }
+          }
+  
+          // (3) 중복 제거 (필요하다면)
+          // imageUrls = [...new Set(imageUrls)];
+  
+          if (imageUrls.length > 0) {
+            sendResponse({
+              success: true,
+              images: imageUrls
+            });
+          } else {
+            sendResponse({ success: false });
+          }
+        })
+        .catch(() => {
+          sendResponse({ success: false });
+        });
+  
+      return true; // 비동기 응답
+    }
+  });  
   
 
 // 도메인을 정규식 패턴으로 변환하는 헬퍼 함수
