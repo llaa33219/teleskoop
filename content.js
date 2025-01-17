@@ -55,7 +55,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             // 도메인별 색상 지정
             if (domain.endsWith("bloupla.net")) return "#0000DD";
             if (domain.endsWith("playentry.org")) return "#00DD00";
-            if (domain.endsWith("firebasestorage.googleapis.com")) return "#DD0000";
+            if (domain.endsWith("firebasestorage.googleapis.com")) return "#0000DD"; // 원래는 #0000DD를 쓰는게 아니라 빨간색으로 해야하는데 다중 이미지 태두리 표기 문제로 인한 임시대처
             if (domain.endsWith("ifh.cc")) return "#DDDDDD";
             if (domain.endsWith("i1fh.cc")) return "#DDDDDD";
             if (domain.endsWith("if1h.cc")) return "#DDDDDD";
@@ -122,337 +122,266 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         if (alreadyEmbed) {
             return { type: 'iframe', url: originalUrl };
         }
-
+    
+        // === [추가/수정] 여기서부터 백그라운드에 단축 URL 확장 요청 후 최종 URL로 처리 ===
         return new Promise((resolve) => {
-            const urlObj = new URL(originalUrl);
-            const { hostname, pathname } = urlObj;
-
-            // 1) bloupla.net 다중 링크
-            if (hostname === "bloupla.net") {
-                const blouplaMultiMatch = originalUrl.match(/^https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
-                if (blouplaMultiMatch) {
-                    const allCodes = blouplaMultiMatch[1]; // "abcd,efgh,ijkl"
-                    if (allCodes.includes(',')) {
-                        const codeArr = allCodes.split(',');
-                        const finalUrls = codeArr.map(c => `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${c}?alt=media`);
-                        resolve({ type: 'multiple-img', urls: finalUrls });
-                        return;
-                    } else {
-                        // 단일
-                        resolve({ type: 'img', url: `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${allCodes}?alt=media` });
+            chrome.runtime.sendMessage(
+                { action: 'resolveUrl', url: originalUrl },
+                (response) => {
+                    // 백그라운드에서 확장된 최종 주소
+                    let finalUrl = originalUrl;
+                    if (response && response.success && response.finalUrl) {
+                        finalUrl = response.finalUrl;
+                    }
+    
+                    // 아래부터는 기존 "originalUrl" 대신 "finalUrl" 기준으로 모든 로직 수행
+                    const urlObj = new URL(finalUrl);
+                    const { hostname, pathname } = urlObj;
+    
+                    // 1) bloupla.net 다중 링크
+                    if (hostname === "bloupla.net") {
+                        const blouplaMultiMatch = finalUrl.match(/^https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
+                        if (blouplaMultiMatch) {
+                            const allCodes = blouplaMultiMatch[1]; // "abcd,efgh,ijkl"
+                            if (allCodes.includes(',')) {
+                                const codeArr = allCodes.split(',');
+                                const finalUrls = codeArr.map(c => `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${c}?alt=media`);
+                                resolve({ type: 'multiple-img', urls: finalUrls });
+                                return;
+                            } else {
+                                // 단일
+                                resolve({ type: 'img', url: `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${allCodes}?alt=media` });
+                                return;
+                            }
+                        }
+                    }
+    
+                    // 2) 호스트가 ifh.cc
+                    if (hostname === "ifh.cc") {
+                        // (A) /v-
+                        if (pathname.includes("/v-")) {
+                            const splitV = pathname.split("/v-");
+                            if (splitV.length >= 2) {
+                                const codePart = splitV[1];
+                                if (codePart.includes(".")) {
+                                    const codes = codePart.split(".");
+                                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
+                                    resolve({ type: 'multiple-img', urls: finalUrls });
+                                    return;
+                                } else {
+                                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
+                                    return;
+                                }
+                            }
+                            resolve({ type: 'img', url: finalUrl });
+                            return;
+                        }
+                        // (B) /i-
+                        else if (pathname.includes("/i-")) {
+                            const splitI = pathname.split("/i-");
+                            if (splitI.length >= 2) {
+                                const codePart = splitI[1];
+                                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
+                                return;
+                            }
+                            resolve({ type: 'img', url: finalUrl });
+                            return;
+                        }
+                        resolve({ type: 'img', url: finalUrl });
                         return;
                     }
-                }
-            }
-
-            // ─────────────────────────────────────────
-            // 2) 호스트가 ifh.cc 인 경우 (정규식 X, pathname.includes로 분기)
-            // v- => 다중/단일, i- => 단일
-            // ─────────────────────────────────────────
-            if (hostname === "ifh.cc") {
-                // (A) /v- 감지
-                if (pathname.includes("/v-")) {
-                    // /v- 뒤의 코드 추출
-                    const splitV = pathname.split("/v-");
-                    if (splitV.length >= 2) {
-                        const codePart = splitV[1]; // "abc.def.ghi" or "abc"
-                        if (codePart.includes(".")) {
-                            // 여러개의 dot => multiple
-                            const codes = codePart.split(".");
-                            const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                            resolve({ type: 'multiple-img', urls: finalUrls });
-                            return;
-                        } else {
-                            // 단일
-                            resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
+    
+                    // ifh.cc 비슷한 도메인들을 모두 통합적으로 처리
+                    // i\d*fh.cc | if\d*h.cc | ifh\d*.cc | ifh.c\d*c | ifh.\d*cc 등을 커버
+                    const match = finalUrl.match(
+                        /^https?:\/\/(?:i\d*fh\.cc|if\d*h\.cc|ifh\d*\.cc|ifh\.c\d*c|ifh\.\d*cc)\/(v-|i-)([^/?#]+)/
+                    );
+                    
+                    if (match) {
+                        const [, prefix, codePart] = match; // prefix = 'v-' or 'i-', codePart = 실제 코드
+                        const toIFH = (c) => `https://ifh.cc/g/${c}`;
+                    
+                        // 여러 개 처리
+                        if (prefix === 'v-') {
+                            if (codePart.includes('.')) {
+                                const codes = codePart.split('.');
+                                return resolve({ type: 'multiple-img', urls: codes.map(toIFH) });
+                            }
+                            return resolve({ type: 'img', url: toIFH(codePart) });
+                        }
+                    
+                        // 단일 처리
+                        return resolve({ type: 'img', url: toIFH(codePart) });
+                    }   
+    
+                    // 7) ibb.co
+                    if (hostname === "ibb.co") {
+                        const shortCode = urlObj.pathname.substring(1);
+                        chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (res) => {
+                            if (res && res.success) {
+                                resolve({ type: 'img', url: res.imageUrl });
+                            } else {
+                                resolve({ type: 'iframe', url: finalUrl });
+                            }
+                        });
+                        return;
+                    }
+    
+                    // i\d*bb.co | ib\d*b.co | ibb\d*.co | ibb.\d*co | ibb.c\d*o ...
+                    let ibbMatch = finalUrl.match(
+                        /^https?:\/\/(?:i\d*bb\.co|ib\d*b\.co|ibb\d*\.co|ibb\.\d*co|ibb\.c\d*o)\/([^/]+)$/
+                    );
+                    
+                    if (ibbMatch) {
+                        const shortCode = ibbMatch[1];
+                        // 맨 뒤에 일치한 도메인을 ibb.co 로 교체
+                        let apiUrl = finalUrl.replace(
+                            /(i\d*bb\.co|ib\d*b\.co|ibb\d*\.co|ibb\.\d*co|ibb\.c\d*o)/,
+                            'ibb.co'
+                        );
+                    
+                        chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (res) => {
+                            if (res && res.success) {
+                                resolve({ type: 'img', url: res.imageUrl });
+                            } else {
+                                resolve({ type: 'iframe', url: apiUrl });
+                            }
+                        });
+                        return;
+                    }  
+    
+                    // 8) postimg.cc
+                    let postimgMatch = finalUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
+                    if (postimgMatch) {
+                        const shortCode = postimgMatch[1];
+                        chrome.runtime.sendMessage({ action: 'getPostimgImage', shortCode }, (res) => {
+                            if (res && res.success) {
+                                resolve({ type: 'img', url: res.imageUrl });
+                            } else {
+                                resolve({ type: 'iframe', url: finalUrl });
+                            }
+                        });
+                        return;
+                    }
+    
+                    let postimgGalleryMatch = finalUrl.match(/https?:\/\/postimg\.cc\/gallery\/([^/]+)/);
+                    if (postimgGalleryMatch) {
+                        const shortCode = postimgGalleryMatch[1];
+                        chrome.runtime.sendMessage({ action: 'getPostimgGallery', shortCode }, (res) => {
+                            if (res && res.success && res.images && res.images.length > 0) {
+                                resolve({ type: 'multiple-img', urls: res.images });
+                            } else {
+                                resolve({ type: 'iframe', url: finalUrl });
+                            }
+                        });
+                        return;
+                    }
+    
+                    // 9) bloupla.net 단일
+                    if (hostname === "bloupla.net") {
+                        const blouplaMatch = finalUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
+                        if (blouplaMatch) {
+                            const randomString = blouplaMatch[1];
+                            resolve({
+                                type: 'img',
+                                url: `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${randomString}?alt=media`
+                            });
                             return;
                         }
                     }
-                    // /v-인데 뒤에 코드가 없다면 => 그냥 단일로 처리 or 무시
-                    resolve({ type: 'img', url: originalUrl });
-                    return;
-                }
-                // (B) /i- 감지
-                else if (pathname.includes("/i-")) {
-                    const splitI = pathname.split("/i-");
-                    if (splitI.length >= 2) {
-                        const codePart = splitI[1];
-                        // 필요하면 . 체크하여 다중 가능
-                        resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
+    
+                    // 10) 기타 이미지 도메인들
+                    let sdfMatch = finalUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
+                    if (sdfMatch) {
+                        const randomString = sdfMatch[1];
+                        resolve({ type: 'img', url: `https://lemmy.sdf.org/pictrs/image/${randomString}` });
                         return;
                     }
-                    // /i-인데 뒤에 코드가 없다면 => 단일 처리
-                    resolve({ type: 'img', url: originalUrl });
-                    return;
-                } 
-                // 그 외 => 단일
-                resolve({ type: 'img', url: originalUrl });
-                return;
-            }
-
-            // ─────────────────────────────────────────
-            // 3) i1fh.cc (v- 다중/단일, i- 단일) [기존 정규식 유지]
-            // ─────────────────────────────────────────
-            let i1fhVMatch = originalUrl.match(/^https?:\/\/i1fh\.cc\/v-([^/?#]+)/);
-            if (i1fhVMatch) {
-                const codePart = i1fhVMatch[1]; 
-                if (codePart.includes('.')) {
-                    // 다중
-                    const codes = codePart.split('.');
-                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                    resolve({ type: 'multiple-img', urls: finalUrls });
-                } else {
-                    // 단일
-                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                }
-                return;
-            }
-
-            let i1fhIMatch = originalUrl.match(/^https?:\/\/i1fh\.cc\/i-([^/?#]+)/);
-            if (i1fhIMatch) {
-                const codePart = i1fhIMatch[1];
-                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                return;
-            }
-
-            // 4) if1h.cc (v- 다중/단일, i- 단일)
-            let if1hVMatch = originalUrl.match(/^https?:\/\/if1h\.cc\/v-([^/?#]+)/);
-            if (if1hVMatch) {
-                const codePart = if1hVMatch[1]; 
-                if (codePart.includes('.')) {
-                    // 다중
-                    const codes = codePart.split('.');
-                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                    resolve({ type: 'multiple-img', urls: finalUrls });
-                } else {
-                    // 단일
-                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                }
-                return;
-            }
-
-            let if1hIMatch = originalUrl.match(/^https?:\/\/if1h\.cc\/i-([^/?#]+)/);
-            if (if1hIMatch) {
-                const codePart = if1hIMatch[1];
-                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                return;
-            }
-
-            // 5) ifh1.cc (v- 다중/단일, i- 단일)
-            let ifh1VMatch = originalUrl.match(/^https?:\/\/ifh1\.cc\/v-([^/?#]+)/);
-            if (ifh1VMatch) {
-                const codePart = ifh1VMatch[1]; 
-                if (codePart.includes('.')) {
-                    // 다중
-                    const codes = codePart.split('.');
-                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                    resolve({ type: 'multiple-img', urls: finalUrls });
-                } else {
-                    // 단일
-                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                }
-                return;
-            }
-
-            let ifh1IMatch = originalUrl.match(/^https?:\/\/ifh1\.cc\/i-([^/?#]+)/);
-            if (ifh1IMatch) {
-                const codePart = ifh1IMatch[1];
-                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                return;
-            }
-
-            // 6) ifh.c1c, ifh.1cc ...
-            let ifhc1cV = originalUrl.match(/^https?:\/\/ifh\.c1c\/v-([^/?#]+)/);
-            if (ifhc1cV) {
-                const codePart = ifhc1cV[1];
-                if (codePart.includes('.')) {
-                    const codes = codePart.split('.');
-                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                    resolve({ type: 'multiple-img', urls: finalUrls });
-                } else {
-                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                }
-                return;
-            }
-
-            let ifhc1cI = originalUrl.match(/^https?:\/\/ifh\.c1c\/i-([^/?#]+)/);
-            if (ifhc1cI) {
-                const codePart = ifhc1cI[1];
-                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                return;
-            }
-
-            let ifh1ccV = originalUrl.match(/^https?:\/\/ifh\.1cc\/v-([^/?#]+)/);
-            if (ifh1ccV) {
-                const codePart = ifh1ccV[1];
-                if (codePart.includes('.')) {
-                    const codes = codePart.split('.');
-                    const finalUrls = codes.map(c => `https://ifh.cc/g/${c}`);
-                    resolve({ type: 'multiple-img', urls: finalUrls });
-                } else {
-                    resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                }
-                return;
-            }
-
-            let ifh1ccI = originalUrl.match(/^https?:\/\/ifh\.1cc\/i-([^/?#]+)/);
-            if (ifh1ccI) {
-                const codePart = ifh1ccI[1];
-                resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
-                return;
-            }
-
-            // 7) ibb.co
-            if (hostname === "ibb.co") {
-                const shortCode = urlObj.pathname.substring(1);
-                chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (response) => {
-                    if (response && response.success) {
-                        resolve({ type: 'img', url: response.imageUrl });
-                    } else {
-                        resolve({ type: 'iframe', url: originalUrl });
+    
+                    let imgnewsMatch = finalUrl.match(/^https?:\/\/imgnews\.pstatic\.net\/image\/(.+)/);
+                    if (imgnewsMatch) {
+                        const randomString = imgnewsMatch[1];
+                        resolve({ type: 'img', url: `https://imgnews.pstatic.net/image/${randomString}` });
+                        return;
                     }
-                });
-                return;
-            }
-
-            // i1bb.co, ib1b.co, ibb1.co, ibb.1co, ibb.c1o ...
-            let ibbMatch = originalUrl.match(/https?:\/\/(?:i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)\/([^/]+)$/);
-            if (ibbMatch) {
-                const shortCode = ibbMatch[1];
-                let apiUrl = originalUrl.replace(/(i1bb\.co|ib1b\.co|ibb1\.co|ibb\.1co|ibb\.c1o)/, 'ibb.co');
-                chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (response) => {
-                    if (response && response.success) {
-                        resolve({ type: 'img', url: response.imageUrl });
-                    } else {
-                        resolve({ type: 'iframe', url: apiUrl });
+    
+                    let baboboxMatch = finalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
+                    if (baboboxMatch) {
+                        const randomString = baboboxMatch[1];
+                        resolve({ type: 'img', url: `https://baboboximg.onrender.com/images/${randomString}` });
+                        return;
                     }
-                });
-                return;
-            }
-
-            // 8) postimg.cc
-            let postimgMatch = originalUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
-            if (postimgMatch) {
-                const shortCode = postimgMatch[1];
-                chrome.runtime.sendMessage({ action: 'getPostimgImage', shortCode }, (response) => {
-                    if (response && response.success) {
-                        resolve({ type: 'img', url: response.imageUrl });
-                    } else {
-                        resolve({ type: 'iframe', url: originalUrl });
+    
+                    let bbbiMatch = finalUrl.match(/https?:\/\/bbbi\.onrender\.com\/v\?f=(.+)$/);
+                    if (bbbiMatch) {
+                        const randomString = bbbiMatch[1];
+                        resolve({ type: 'img', url: `https://bbbi.onrender.com/images/${randomString}` });
+                        return;
                     }
-                });
-                return;
-            }
-            
-            let postimgGalleryMatch = originalUrl.match(/https?:\/\/postimg\.cc\/gallery\/([^/]+)/);
-            if (postimgGalleryMatch) {
-                const shortCode = postimgGalleryMatch[1];
-                // 백그라운드로 메시지 보내서 갤러리 내 이미지 목록을 가져옴
-                chrome.runtime.sendMessage({ action: 'getPostimgGallery', shortCode }, (response) => {
-                    if (response && response.success && response.images && response.images.length > 0) {
-                        // 여러 이미지를 한꺼번에 처리
-                        resolve({ type: 'multiple-img', urls: response.images });
-                    } else {
-                        // 실패 시 iframe 처리
-                        resolve({ type: 'iframe', url: originalUrl });
+    
+                    // playentry.org/uploads/ 이미지
+                    if (hostname === "playentry.org" && pathname.includes("/uploads/")) {
+                        resolve({ type: 'img', url: finalUrl });
+                        return;
                     }
-                });
-                return;
-            }
-
-            // 9) bloupla.net 단일 (다중은 위에서 처리)
-            if (hostname === "bloupla.net") {
-                const blouplaMatch = originalUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
-                if (blouplaMatch) {
-                    const randomString = blouplaMatch[1];
-                    resolve({
-                        type: 'img',
-                        url: `https://firebasestorage.googleapis.com/v0/b/imgshare-2.appspot.com/o/${randomString}?alt=media`
-                    });
-                    return;
+    
+                    // space.playentry.org/world/
+                    let spaceMatch = finalUrl.match(/https?:\/\/space\.playentry\.org\/world\/([^/]+)\/([^/]+)$/);
+                    if (spaceMatch) {
+                        const firstPart = spaceMatch[1];
+                        resolve({ type: 'iframe', url: `https://space.playentry.org/world/${firstPart}` });
+                        return;
+                    }
+    
+                    // 유튜브 watch
+                    let youtubeMatch = finalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+                    if (youtubeMatch) {
+                        const videoId = youtubeMatch[1];
+                        resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                        return;
+                    }
+    
+                    // YouTube Shorts
+                    let youtubeShortsMatch = finalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
+                    if (youtubeShortsMatch) {
+                        const videoId = youtubeShortsMatch[1];
+                        resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                        return;
+                    }
+    
+                    // 유튜브 단축링크
+                    let youtubeShortMatch = finalUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
+                    if (youtubeShortMatch) {
+                        const videoId = youtubeShortMatch[1];
+                        resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                        return;
+                    }
+    
+                    // streamable
+                    let streamableMatch = finalUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
+                    if (streamableMatch) {
+                        const videoId = streamableMatch[1];
+                        resolve({ type: 'iframe', url: `https://streamable.com/e/${videoId}` });
+                        return;
+                    }
+    
+                    // playentry project
+                    let playentryMatch = finalUrl.match(/^https?:\/\/playentry\.org\/project\/([^/]+)/);
+                    if (playentryMatch) {
+                        const projectId = playentryMatch[1];
+                        resolve({
+                            type: 'iframe',
+                            url: `https://playentry.org/iframe/${projectId}`
+                        });
+                        return;
+                    }
+    
+                    // 그 외 도메인은 iframe 처리
+                    resolve({ type: 'iframe', url: finalUrl });
                 }
-            }
-
-            // 10) 기타 이미지 도메인들
-            let sdfMatch = originalUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
-            if (sdfMatch) {
-                const randomString = sdfMatch[1];
-                resolve({ type: 'img', url: `https://lemmy.sdf.org/pictrs/image/${randomString}` });
-                return;
-            }
-
-            let imgnewsMatch = originalUrl.match(/^https?:\/\/imgnews\.pstatic\.net\/image\/(.+)/);
-            if (imgnewsMatch) {
-                const randomString = imgnewsMatch[1];
-                resolve({ type: 'img', url: `https://imgnews.pstatic.net/image/${randomString}` });
-                return;
-            }
-
-            // baboboximg.onrender.com
-            let baboboxMatch = originalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
-            if (baboboxMatch) {
-                const randomString = baboboxMatch[1];
-                resolve({ type: 'img', url: `https://baboboximg.onrender.com/images/${randomString}` });
-                return;
-            }
-
-            let bbbiMatch = originalUrl.match(/https?:\/\/bbbi\.onrender\.com\/v\?f=(.+)$/);
-            if (bbbiMatch) {
-                const randomString = bbbiMatch[1];
-                resolve({ type: 'img', url: `https://bbbi.onrender.com/images/${randomString}` });
-                return;
-            }
-
-            // playentry.org/uploads/ 이미지
-            if (hostname === "playentry.org" && pathname.includes("/uploads/")) {
-                resolve({ type: 'img', url: originalUrl });
-                return;
-            }
-
-            // space.playentry.org/world/
-            let spaceMatch = originalUrl.match(/https?:\/\/space\.playentry\.org\/world\/([^/]+)\/([^/]+)$/);
-            if (spaceMatch) {
-                const firstPart = spaceMatch[1];
-                resolve({ type: 'iframe', url: `https://space.playentry.org/world/${firstPart}` });
-                return;
-            }
-
-            // 유튜브 watch
-            let youtubeMatch = originalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
-            if (youtubeMatch) {
-                const videoId = youtubeMatch[1];
-                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
-                return;
-            }
-
-            // YouTube Shorts
-            let youtubeShortsMatch = originalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
-            if (youtubeShortsMatch) {
-                const videoId = youtubeShortsMatch[1];
-                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
-                return;
-            }
-
-            // 유튜브 단축링크
-            let youtubeShortMatch = originalUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
-            if (youtubeShortMatch) {
-                const videoId = youtubeShortMatch[1];
-                resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
-                return;
-            }
-
-            // streamable
-            let streamableMatch = originalUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
-            if (streamableMatch) {
-                const videoId = streamableMatch[1];
-                resolve({ type: 'iframe', url: `https://streamable.com/e/${videoId}` });
-                return;
-            }
-
-            // 그 외 도메인은 iframe 처리
-            resolve({ type: 'iframe', url: originalUrl });
+            );
         });
-    }
+    }    
 
     /**
      * 동영상 태그 생성
@@ -544,9 +473,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     async function processPosts() {
         const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
         posts.forEach(post => {
+            // === 수정된 부분 시작 ===
             if (!post.dataset.converted) {
-                post.dataset.converted = "true";
-
+                let foundPreviewLink = false; 
                 const links = post.querySelectorAll("a[href]");
                 links.forEach(link => {
                     if (!link.hasAttribute('href')) return;
@@ -570,9 +499,16 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     // http:// 또는 https:// 로 시작하면 미리보기 삽입
                     if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
                         insertPreviewContainer(link, finalUrl);
+                        foundPreviewLink = true; 
                     }
                 });
+
+                // 만약 하나라도 미리보기 컨테이너가 생성되었다면 "converted" 처리
+                if (foundPreviewLink) {
+                    post.dataset.converted = "true";
+                }
             }
+            // === 수정된 부분 끝 ===
         });
 
         // 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행

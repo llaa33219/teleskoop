@@ -1,91 +1,115 @@
+// background.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // [기존 코드] ibb.co 처리
   if (message.action === 'getIbbImage') {
     const shortCode = message.shortCode;
-      fetch(`https://ibb.co/${shortCode}`)
-        .then(r => r.text())
-        .then(html => {
-          let imageUrlMatch = html.match(/property="og:image"\s*content="([^"]+)"/);
-          if (imageUrlMatch && imageUrlMatch[1]) {
-            sendResponse({success: true, imageUrl: imageUrlMatch[1]});
-          } else {
-            sendResponse({success: false});
-          }
-        })
-        .catch(() => {
+    fetch(`https://ibb.co/${shortCode}`)
+      .then(r => r.text())
+      .then(html => {
+        let imageUrlMatch = html.match(/property="og:image"\s*content="([^"]+)"/);
+        if (imageUrlMatch && imageUrlMatch[1]) {
+          sendResponse({success: true, imageUrl: imageUrlMatch[1]});
+        } else {
           sendResponse({success: false});
-        });
-      return true; 
-    }
-  
-    if (message.action === 'getPostimgImage') {
-      const shortCode = message.shortCode;
-      fetch(`https://postimg.cc/${shortCode}`)
-        .then(r => r.text())
-        .then(html => {
-          let imageUrlMatch = html.match(/property="og:image"\s*content="([^"]+)"/);
-          if (imageUrlMatch && imageUrlMatch[1]) {
-            sendResponse({success: true, imageUrl: imageUrlMatch[1]});
-          } else {
-            sendResponse({success: false});
-          }
-        })
-        .catch(() => {
-          sendResponse({success: false});
-        });
-      return true;
-    }
-  
-    // **추가**: postimg 갤러리 처리
-    if (message.action === 'getPostimgGallery') {
-      const shortCode = message.shortCode;
-      // 갤러리 페이지 HTML 요청
-      fetch(`https://postimg.cc/gallery/${shortCode}`)
-        .then(r => r.text())
-        .then(html => {
-          // (1) background-image:url('...') 추출용 정규식
-          //     style="....background-image:url('https://i.postimg.cc/...')..."
-          const bgImageRegex = /background-image\s*:\s*url\('([^']+)'\)/g;
-          let match;
-          const imageUrls = [];
-  
-          // (2) 계속 exec()로 돌면서 모든 background-image URL을 찾는다
-          while ((match = bgImageRegex.exec(html)) !== null) {
-            const foundUrl = match[1];
-            // 예: "https://i.postimg.cc/pmf5D5Jg/Copy-2.png"
-            // 필터링이 필요하다면 추가 검사
-            if (foundUrl.startsWith("https://i.postimg.cc/")) {
-              imageUrls.push(foundUrl);
-            }
-          }
-  
-          // (3) 중복 제거 (필요하다면)
-          // imageUrls = [...new Set(imageUrls)];
-  
-          if (imageUrls.length > 0) {
-            sendResponse({
-              success: true,
-              images: imageUrls
-            });
-          } else {
-            sendResponse({ success: false });
-          }
-        })
-        .catch(() => {
-          sendResponse({ success: false });
-        });
-  
-      return true; // 비동기 응답
-    }
-  });  
-  
+        }
+      })
+      .catch(() => {
+        sendResponse({success: false});
+      });
+    return true; 
+  }
 
-// 도메인을 정규식 패턴으로 변환하는 헬퍼 함수
+  // [기존 코드] postimg 이미지 처리
+  if (message.action === 'getPostimgImage') {
+    const shortCode = message.shortCode;
+    fetch(`https://postimg.cc/${shortCode}`)
+      .then(r => r.text())
+      .then(html => {
+        let imageUrlMatch = html.match(/property="og:image"\s*content="([^"]+)"/);
+        if (imageUrlMatch && imageUrlMatch[1]) {
+          sendResponse({success: true, imageUrl: imageUrlMatch[1]});
+        } else {
+          sendResponse({success: false});
+        }
+      })
+      .catch(() => {
+        sendResponse({success: false});
+      });
+    return true;
+  }
+
+  // [기존 코드] postimg 갤러리 처리
+  if (message.action === 'getPostimgGallery') {
+    const shortCode = message.shortCode;
+    fetch(`https://postimg.cc/gallery/${shortCode}`)
+      .then(r => r.text())
+      .then(html => {
+        const bgImageRegex = /background-image\s*:\s*url\('([^']+)'\)/g;
+        let match;
+        const imageUrls = [];
+
+        while ((match = bgImageRegex.exec(html)) !== null) {
+          const foundUrl = match[1];
+          if (foundUrl.startsWith("https://i.postimg.cc/")) {
+            imageUrls.push(foundUrl);
+          }
+        }
+
+        if (imageUrls.length > 0) {
+          sendResponse({
+            success: true,
+            images: imageUrls
+          });
+        } else {
+          sendResponse({ success: false });
+        }
+      })
+      .catch(() => {
+        sendResponse({ success: false });
+      });
+
+    return true; // 비동기 응답
+  }
+
+  // === [수정 후 유지] 단축 URL(예: naver.me) → 최종 주소만 반환 ===
+  if (message.action === 'resolveUrl') {
+    expandShortUrlIfNeeded(message.url)
+      .then((finalUrl) => {
+        // 이제 백그라운드에서는 **최종 링크만** 반환
+        sendResponse({ success: true, finalUrl });
+      })
+      .catch((err) => {
+        sendResponse({ success: false, error: err.message });
+      });
+    return true;
+  }
+});
+
+/**
+ * 단축 URL이면 fetch로 리다이렉트를 따라가 최종 주소를 반환.
+ * 아닌 경우 그대로 반환.
+ */
+async function expandShortUrlIfNeeded(url) {
+  // naver.me, bit.ly, tinyurl.com 등을 예시로 추가
+  const shortUrlRegex = /^https?:\/\/(naver\.me|bit\.ly|tinyurl\.com|goo\.gl|kutt\.it)\//i;
+  if (shortUrlRegex.test(url)) {
+    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
+    return response.url;
+  }
+  return url;
+}
+
+/**
+ * 1) 도메인을 정규식 패턴으로 변환하는 헬퍼 함수
+ */
 function makeDomainRegex(domain) {
   const escapedDomain = domain.replace(/\./g, "\\.");
   return `^https?://([^/]*\\.)?${escapedDomain}(/|$)`;
 }
 
-// 화이트리스트 도메인(iframe 허용)
+/**
+ * 2) 화이트리스트 도메인 목록
+ */
 const WHITELIST_DOMAINS = [
   "bloupla.net",
   "playentry.org",
@@ -124,57 +148,101 @@ const WHITELIST_DOMAINS = [
   "bbbi.onrender.com"
 ];
 
-// 화이트리스트 도메인을 정규식 패턴으로 변환
-const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(domain => makeDomainRegex(domain));
+// 화이트리스트 도메인들을 정규식 배열로 변환
+const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(makeDomainRegex);
 
-// 블랙리스트 패턴: 화이트리스트 중 특정 경로 다시 차단
+/**
+ * 3) 블랙리스트 패턴
+ */
 const BLACKLIST_PATTERNS = [
-  "^https://playentry\\.org/signout.*",
+  "^https?://playentry\\.org/signout.*",
   "^https?://ncc\\.playentry\\.org/signout.*"
 ];
 
+/**
+ * 4) 설치(또는 업데이트)될 때 동적으로 규칙을 설정
+ */
 chrome.runtime.onInstalled.addListener(() => {
-  // 1. 모든 iframe 로드를 차단하는 규칙 (우선순위 1)
-  const blockAllIframesRule = {
+  // 규칙 1: (우선순위 1) 모든 iframe에 대해 script-src 'none'을 강제 주입
+  const blockAllScriptsInIframesRule = {
     id: 1,
     priority: 1,
-    action: { type: "block" },
+    action: {
+      type: "modifyHeaders",
+      responseHeaders: [
+        {
+          header: "Content-Security-Policy",
+          operation: "set",
+          value: [
+            "default-src * data: blob:;", 
+            "script-src 'none';",          
+            "style-src * 'unsafe-inline';",
+            "font-src * data:;",           
+            "img-src * data:;"             
+          ].join(" ")
+        }
+      ]
+    },
     condition: {
       resourceTypes: ["sub_frame"],
-      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
+      initiatorDomains: ["playentry.org"]
     }
   };
 
-  // 2. 화이트리스트 도메인 iframe 허용 규칙 (우선순위 2)
-  const allowRules = WHITELIST_PATTERNS.map((pattern, index) => ({
+  // 규칙 2: (우선순위 2) 화이트리스트에 대해서는 CSP를 제거(= JS 허용)
+  const allowScriptRules = WHITELIST_PATTERNS.map((pattern, index) => ({
     id: 100 + index,
     priority: 2,
-    action: { type: "allow" },
+    action: {
+      type: "modifyHeaders",
+      responseHeaders: [
+        {
+          header: "Content-Security-Policy",
+          operation: "remove"
+        }
+      ]
+    },
     condition: {
       resourceTypes: ["sub_frame"],
       regexFilter: pattern,
-      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
+      initiatorDomains: ["playentry.org"]
     }
   }));
 
-  // 3. 블랙리스트 규칙 (우선순위 3)
+  // 규칙 3: (우선순위 3) 블랙리스트 경로에 대해서는 iframe 자체 차단
   const blacklistRules = BLACKLIST_PATTERNS.map((pattern, index) => ({
     id: 1000 + index,
     priority: 3,
-    action: { type: "block" },
+    action: {
+      type: "block"
+    },
     condition: {
       resourceTypes: ["sub_frame"],
       regexFilter: pattern,
-      initiatorDomains: ["playentry.org"] // playentry.org에서만 작동
+      initiatorDomains: ["playentry.org"]
     }
   }));
 
-  const allRuleIds = [1, ...allowRules.map(r => r.id), ...blacklistRules.map(r => r.id)];
+  // 모든 규칙 ID를 모아 기존 동일 ID 규칙 제거 후 새 규칙 등록
+  const allRuleIds = [
+    blockAllScriptsInIframesRule.id,
+    ...allowScriptRules.map(r => r.id),
+    ...blacklistRules.map(r => r.id)
+  ];
 
-  chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: allRuleIds,
-    addRules: [blockAllIframesRule, ...allowRules, ...blacklistRules]
-  }, () => {
-    console.log("iframe 차단/허용 룰 적용 완료 (playentry.org에서만 동작)");
-  });
+  chrome.declarativeNetRequest.updateDynamicRules(
+    {
+      removeRuleIds: allRuleIds,
+      addRules: [
+        blockAllScriptsInIframesRule,
+        ...allowScriptRules,
+        ...blacklistRules
+      ]
+    },
+    () => {
+      console.log(
+        "[Extension] iframe JS 차단 + 화이트리스트 허용 + 블랙리스트 차단 규칙 적용 완료!"
+      );
+    }
+  );
 });
