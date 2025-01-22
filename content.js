@@ -134,13 +134,30 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         finalUrl = response.finalUrl;
                     }
     
-                    // 아래부터는 기존 "originalUrl" 대신 "finalUrl" 기준으로 모든 로직 수행
-                    const urlObj = new URL(finalUrl);
+                    // http://playentry.org -> https://playentry.org (혼합콘텐츠 방지)
+                    if (finalUrl.startsWith("http://playentry.org/")) {
+                        finalUrl = finalUrl.replace("http://playentry.org/", "https://playentry.org/");
+                    }
+                    if (finalUrl.startsWith("http://ncc.playentry.org/")) {
+                        finalUrl = finalUrl.replace("http://ncc.playentry.org/", "https://ncc.playentry.org/");
+                    }
+
+                    // decodeURI로 /%73ignout → /signout 등 인코딩 해제
+                    const decodedUrl = decodeURI(finalUrl);
+
+                    // signout 경로면 => 차단
+                    if (/^https?:\/\/(?:ncc\.)?playentry\.org\/signout.*/.test(decodedUrl)) {
+                        resolve({ type: 'block' });
+                        return;
+                    }
+    
+                    // 아래부터는 decodedUrl 기준으로 처리
+                    const urlObj = new URL(decodedUrl);
                     const { hostname, pathname } = urlObj;
     
                     // 1) bloupla.net 다중 링크
                     if (hostname === "bloupla.net") {
-                        const blouplaMultiMatch = finalUrl.match(/^https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
+                        const blouplaMultiMatch = decodedUrl.match(/^https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
                         if (blouplaMultiMatch) {
                             const allCodes = blouplaMultiMatch[1]; // "abcd,efgh,ijkl"
                             if (allCodes.includes(',')) {
@@ -158,7 +175,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     
                     // 2) 호스트가 ifh.cc
                     if (hostname === "ifh.cc") {
-                        // (A) /v-
                         if (pathname.includes("/v-")) {
                             const splitV = pathname.split("/v-");
                             if (splitV.length >= 2) {
@@ -173,10 +189,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                                     return;
                                 }
                             }
-                            resolve({ type: 'img', url: finalUrl });
+                            resolve({ type: 'img', url: decodedUrl });
                             return;
                         }
-                        // (B) /i-
                         else if (pathname.includes("/i-")) {
                             const splitI = pathname.split("/i-");
                             if (splitI.length >= 2) {
@@ -184,24 +199,21 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                                 resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
                                 return;
                             }
-                            resolve({ type: 'img', url: finalUrl });
+                            resolve({ type: 'img', url: decodedUrl });
                             return;
                         }
-                        resolve({ type: 'img', url: finalUrl });
+                        resolve({ type: 'img', url: decodedUrl });
                         return;
                     }
     
-                    // ifh.cc 비슷한 도메인들을 모두 통합적으로 처리
-                    // i\d*fh.cc | if\d*h.cc | ifh\d*.cc | ifh.c\d*c | ifh.\d*cc 등을 커버
-                    const match = finalUrl.match(
+                    // ifh.cc 비슷한 도메인들
+                    const match = decodedUrl.match(
                         /^https?:\/\/(?:i\d*fh\.cc|if\d*h\.cc|ifh\d*\.cc|ifh\.c\d*c|ifh\.\d*cc)\/(v-|i-)([^/?#]+)/
                     );
-                    
                     if (match) {
-                        const [, prefix, codePart] = match; // prefix = 'v-' or 'i-', codePart = 실제 코드
+                        const [, prefix, codePart] = match; // prefix = 'v-' or 'i-', codePart
                         const toIFH = (c) => `https://ifh.cc/g/${c}`;
                     
-                        // 여러 개 처리
                         if (prefix === 'v-') {
                             if (codePart.includes('.')) {
                                 const codes = codePart.split('.');
@@ -213,33 +225,30 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         // 단일 처리
                         return resolve({ type: 'img', url: toIFH(codePart) });
                     }   
-    
+                    
                     // 7) ibb.co
                     if (hostname === "ibb.co") {
-                        const shortCode = urlObj.pathname.substring(1);
+                        const shortCode = pathname.substring(1);
                         chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (res) => {
                             if (res && res.success) {
                                 resolve({ type: 'img', url: res.imageUrl });
                             } else {
-                                resolve({ type: 'iframe', url: finalUrl });
+                                resolve({ type: 'iframe', url: decodedUrl });
                             }
                         });
                         return;
                     }
     
-                    // i\d*bb.co | ib\d*b.co | ibb\d*.co | ibb.\d*co | ibb.c\d*o ...
-                    let ibbMatch = finalUrl.match(
+                    // i\d*bb.co 등등
+                    let ibbMatch = decodedUrl.match(
                         /^https?:\/\/(?:i\d*bb\.co|ib\d*b\.co|ibb\d*\.co|ibb\.\d*co|ibb\.c\d*o)\/([^/]+)$/
                     );
-                    
                     if (ibbMatch) {
                         const shortCode = ibbMatch[1];
-                        // 맨 뒤에 일치한 도메인을 ibb.co 로 교체
-                        let apiUrl = finalUrl.replace(
+                        let apiUrl = decodedUrl.replace(
                             /(i\d*bb\.co|ib\d*b\.co|ibb\d*\.co|ibb\.\d*co|ibb\.c\d*o)/,
                             'ibb.co'
                         );
-                    
                         chrome.runtime.sendMessage({ action: 'getIbbImage', shortCode }, (res) => {
                             if (res && res.success) {
                                 resolve({ type: 'img', url: res.imageUrl });
@@ -248,30 +257,29 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             }
                         });
                         return;
-                    }  
+                    }
     
                     // 8) postimg.cc
-                    let postimgMatch = finalUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
+                    let postimgMatch = decodedUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
                     if (postimgMatch) {
                         const shortCode = postimgMatch[1];
                         chrome.runtime.sendMessage({ action: 'getPostimgImage', shortCode }, (res) => {
                             if (res && res.success) {
                                 resolve({ type: 'img', url: res.imageUrl });
                             } else {
-                                resolve({ type: 'iframe', url: finalUrl });
+                                resolve({ type: 'iframe', url: decodedUrl });
                             }
                         });
                         return;
                     }
-    
-                    let postimgGalleryMatch = finalUrl.match(/https?:\/\/postimg\.cc\/gallery\/([^/]+)/);
+                    let postimgGalleryMatch = decodedUrl.match(/https?:\/\/postimg\.cc\/gallery\/([^/]+)/);
                     if (postimgGalleryMatch) {
                         const shortCode = postimgGalleryMatch[1];
                         chrome.runtime.sendMessage({ action: 'getPostimgGallery', shortCode }, (res) => {
                             if (res && res.success && res.images && res.images.length > 0) {
                                 resolve({ type: 'multiple-img', urls: res.images });
                             } else {
-                                resolve({ type: 'iframe', url: finalUrl });
+                                resolve({ type: 'iframe', url: decodedUrl });
                             }
                         });
                         return;
@@ -279,7 +287,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     
                     // 9) bloupla.net 단일
                     if (hostname === "bloupla.net") {
-                        const blouplaMatch = finalUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
+                        const blouplaMatch = decodedUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
                         if (blouplaMatch) {
                             const randomString = blouplaMatch[1];
                             resolve({
@@ -290,43 +298,36 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         }
                     }
     
-                    // 10) 기타 이미지 도메인들
-                    let sdfMatch = finalUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
+                    // 기타...
+                    let sdfMatch = decodedUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
                     if (sdfMatch) {
                         const randomString = sdfMatch[1];
                         resolve({ type: 'img', url: `https://lemmy.sdf.org/pictrs/image/${randomString}` });
                         return;
                     }
-    
-                    let imgnewsMatch = finalUrl.match(/^https?:\/\/imgnews\.pstatic\.net\/image\/(.+)/);
+                    let imgnewsMatch = decodedUrl.match(/^https?:\/\/imgnews\.pstatic\.net\/image\/(.+)/);
                     if (imgnewsMatch) {
                         const randomString = imgnewsMatch[1];
                         resolve({ type: 'img', url: `https://imgnews.pstatic.net/image/${randomString}` });
                         return;
                     }
-    
-                    let baboboxMatch = finalUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
+                    let baboboxMatch = decodedUrl.match(/https?:\/\/baboboximg\.onrender\.com\/view\?file=(.+)$/);
                     if (baboboxMatch) {
                         const randomString = baboboxMatch[1];
                         resolve({ type: 'img', url: `https://baboboximg.onrender.com/images/${randomString}` });
                         return;
                     }
-    
-                    let bbbiMatch = finalUrl.match(/https?:\/\/bbbi\.onrender\.com\/v\?f=(.+)$/);
+                    let bbbiMatch = decodedUrl.match(/https?:\/\/bbbi\.onrender\.com\/v\?f=(.+)$/);
                     if (bbbiMatch) {
                         const randomString = bbbiMatch[1];
                         resolve({ type: 'img', url: `https://bbbi.onrender.com/images/${randomString}` });
                         return;
                     }
-    
-                    // playentry.org/uploads/ 이미지
                     if (hostname === "playentry.org" && pathname.includes("/uploads/")) {
-                        resolve({ type: 'img', url: finalUrl });
+                        resolve({ type: 'img', url: decodedUrl });
                         return;
                     }
-    
-                    // space.playentry.org/world/
-                    let spaceMatch = finalUrl.match(/https?:\/\/space\.playentry\.org\/world\/([^/]+)\/([^/]+)$/);
+                    let spaceMatch = decodedUrl.match(/https?:\/\/space\.playentry\.org\/world\/([^/]+)\/([^/]+)$/);
                     if (spaceMatch) {
                         const firstPart = spaceMatch[1];
                         resolve({ type: 'iframe', url: `https://space.playentry.org/world/${firstPart}` });
@@ -334,7 +335,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     }
     
                     // 유튜브 watch
-                    let youtubeMatch = finalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+                    let youtubeMatch = decodedUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
                     if (youtubeMatch) {
                         const videoId = youtubeMatch[1];
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
@@ -342,15 +343,15 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     }
     
                     // YouTube Shorts
-                    let youtubeShortsMatch = finalUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
+                    let youtubeShortsMatch = decodedUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
                     if (youtubeShortsMatch) {
                         const videoId = youtubeShortsMatch[1];
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
                         return;
                     }
     
-                    // 유튜브 단축링크
-                    let youtubeShortMatch = finalUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
+                    // 유튜브 단축
+                    let youtubeShortMatch = decodedUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
                     if (youtubeShortMatch) {
                         const videoId = youtubeShortMatch[1];
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
@@ -358,7 +359,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     }
     
                     // streamable
-                    let streamableMatch = finalUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
+                    let streamableMatch = decodedUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
                     if (streamableMatch) {
                         const videoId = streamableMatch[1];
                         resolve({ type: 'iframe', url: `https://streamable.com/e/${videoId}` });
@@ -366,18 +367,19 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     }
     
                     // playentry project
-                    let playentryMatch = finalUrl.match(/^https?:\/\/playentry\.org\/project\/([^/]+)/);
+                    let playentryMatch = decodedUrl.match(/^https?:\/\/playentry\.org\/project\/([^/]+)/);
                     if (playentryMatch) {
                         const projectId = playentryMatch[1];
                         resolve({
                             type: 'iframe',
-                            url: `https://playentry.org/iframe/${projectId}`
+                            url: `https://bloupla.net/project-preview/?=https://playentry.org/project/${projectId}`,
+                            customHeight: 395
                         });
                         return;
                     }
-    
+
                     // 그 외 도메인은 iframe 처리
-                    resolve({ type: 'iframe', url: finalUrl });
+                    resolve({ type: 'iframe', url: decodedUrl });
                 }
             );
         });
@@ -402,13 +404,15 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
     /**
      * 아이프레임 태그 생성
+     * (customHeight가 있으면 해당 값으로 높이를 설정)
      */
-    function createIframeElement(url, originalUrl, container) {
+    function createIframeElement(url, originalUrl, container, customHeight) {
         const iframe = document.createElement("iframe");
         iframe.setAttribute('data-preview-iframe', 'true');
         iframe.src = url;
         iframe.style.width = "99%";
-        iframe.style.height = "400px";
+        // 여기서 customHeight가 존재하면 그 값으로, 없으면 400px로
+        iframe.style.height = customHeight ? customHeight + "px" : "400px";
         iframe.style.border = `2px solid ${getBorderColor(originalUrl)}`;
         iframe.style.borderRadius = "8px";
         iframe.style.marginTop = "10px";
@@ -473,7 +477,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     async function processPosts() {
         const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
         posts.forEach(post => {
-            // === 수정된 부분 시작 ===
             if (!post.dataset.converted) {
                 let foundPreviewLink = false; 
                 const links = post.querySelectorAll("a[href]");
@@ -508,7 +511,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     post.dataset.converted = "true";
                 }
             }
-            // === 수정된 부분 끝 ===
         });
 
         // 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행
@@ -521,6 +523,19 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (!isInViewport(container)) continue;
 
             const result = await transformUrlIfNeeded(originalUrl);
+
+            // block이면 => signout 차단
+            if (result.type === 'block') {
+                container.dataset.previewDone = "true";
+
+                // 컨테이너 앞의 원본 링크도 제거
+                const prev = container.previousElementSibling;
+                if (prev && prev.tagName === 'A') {
+                    prev.remove();
+                }
+                container.remove();
+                continue;
+            }
 
             if (result.type === 'multiple-img') {
                 // 다중 이미지
@@ -540,7 +555,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     } else if (type === 'video') {
                         createVideoElement(url, originalUrl, container);
                     } else {
-                        createIframeElement(url, originalUrl, container);
+                        // ★ 추가: playentry project인 경우 customHeight가 있을 수 있으니 함께 전달
+                        createIframeElement(url, originalUrl, container, result.customHeight);
                     }
                 }
                 container.dataset.previewDone = "true";

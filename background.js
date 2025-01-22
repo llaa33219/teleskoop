@@ -71,32 +71,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // 비동기 응답
   }
 
-  // === [수정 후 유지] 단축 URL(예: naver.me) → 최종 주소만 반환 ===
+  // [수정] 단축 URL(예: naver.me 등) → 최종 주소 반환
   if (message.action === 'resolveUrl') {
     expandShortUrlIfNeeded(message.url)
       .then((finalUrl) => {
-        // 이제 백그라운드에서는 **최종 링크만** 반환
         sendResponse({ success: true, finalUrl });
       })
       .catch((err) => {
         sendResponse({ success: false, error: err.message });
       });
-    return true;
+    return true; // 비동기 처리
   }
 });
 
 /**
- * 단축 URL이면 fetch로 리다이렉트를 따라가 최종 주소를 반환.
- * 아닌 경우 그대로 반환.
+ * 단축 URL이면 fetch로 3xx 리다이렉트 따라가 최종 주소를 반환.
+ * 3xx가 없는데 HTML에 meta refresh 혹은 JS로 location 이동이 있으면 파싱.
+ * 그 외는 그대로 반환.
  */
 async function expandShortUrlIfNeeded(url) {
   // naver.me, bit.ly, tinyurl.com 등을 예시로 추가
   const shortUrlRegex = /^https?:\/\/(naver\.me|bit\.ly|tinyurl\.com|goo\.gl|kutt\.it)\//i;
-  if (shortUrlRegex.test(url)) {
-    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
-    return response.url;
+  
+  // 1) 일반 케이스: 3xx 리다이렉트를 따라가기
+  let response;
+  try {
+    response = await fetch(url, { method: 'GET', redirect: 'follow' });
+  } catch (e) {
+    // fetch 실패하면 어쩔 수 없이 원본 반환
+    return url;
   }
-  return url;
+
+  // response.url = 최종 리다이렉트된 주소
+  let finalUrl = response.url;
+
+  // 2) 만약 최종 주소가 원본이랑 같다면, 3xx가 아닌 HTML상의 meta/js 리프레시를 검사
+  if (finalUrl === url) {
+    try {
+      const text = await response.text();
+      // (a) 메타 리프레시
+      let metaMatch = text.match(/<meta[^>]+http-equiv=["']refresh["'][^>]*content=["']\s*\d*\s*;\s*url=(.*?)["']/i);
+      if (metaMatch && metaMatch[1]) {
+        finalUrl = metaMatch[1];
+      } else {
+        // (b) window.location / location.href / document.location 등 단순 JS 패턴
+        let jsMatch = text.match(/window\.(?:location|location\.href)\s*=\s*["']([^"']+)["']/i);
+        if (!jsMatch) {
+          jsMatch = text.match(/(?:location|document\.location)\s*=\s*["']([^"']+)["']/i);
+        }
+        if (jsMatch && jsMatch[1]) {
+          finalUrl = jsMatch[1];
+        }
+      }
+    } catch (e) {
+      // HTML 파싱 실패 시에는 그냥 finalUrl = response.url 유지
+    }
+  }
+
+  // 3) 만약 여전히 finalUrl가 단축URL 형태라면 더 이상 파싱할 수 없으니 그대로 반환
+  if (shortUrlRegex.test(finalUrl) && finalUrl !== url) {
+    // 무한루프 방지용: 여기서 한 번만 반복
+    return finalUrl;
+  }
+
+  // 그 외
+  return finalUrl;
 }
 
 /**
@@ -163,7 +202,11 @@ const BLACKLIST_PATTERNS = [
  * 4) 설치(또는 업데이트)될 때 동적으로 규칙을 설정
  */
 chrome.runtime.onInstalled.addListener(() => {
-  // 규칙 1: (우선순위 1) 모든 iframe에 대해 script-src 'none'을 강제 주입
+
+  // ------------------------------------------------
+  // 1) (예) 모든 iframe에 대해 script-src 'none' 강제
+  //    (원래 쓰시던 rule)
+  // ------------------------------------------------
   const blockAllScriptsInIframesRule = {
     id: 1,
     priority: 1,
@@ -189,17 +232,28 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   };
 
-  // 규칙 2: (우선순위 2) 화이트리스트에 대해서는 CSP를 제거(= JS 허용)
-  const allowScriptRules = WHITELIST_PATTERNS.map((pattern, index) => ({
-    id: 100 + index,
+  // ------------------------------------------------
+  // 2) (예) 화이트리스트(도메인)에서는 CSP를 remove
+  //    (원래 쓰시던 rule)
+  // ------------------------------------------------
+  const WHITELIST_DOMAINS = [
+    // ...
+    // "bloupla.net", "playentry.org", etc...
+  ];
+
+  function makeDomainRegex(domain) {
+    const escaped = domain.replace(/\./g, "\\.");
+    return `^https?://([^/]*\\.)?${escaped}(/|$)`;
+  }
+  const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(makeDomainRegex);
+
+  const allowScriptRules = WHITELIST_PATTERNS.map((pattern, idx) => ({
+    id: 100 + idx,
     priority: 2,
     action: {
       type: "modifyHeaders",
       responseHeaders: [
-        {
-          header: "Content-Security-Policy",
-          operation: "remove"
-        }
+        { header: "Content-Security-Policy", operation: "remove" }
       ]
     },
     condition: {
@@ -209,21 +263,51 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   }));
 
-  // 규칙 3: (우선순위 3) 블랙리스트 경로에 대해서는 iframe 자체 차단
+  // ------------------------------------------------
+  // 3) 블랙리스트 - signout 완전 차단
+  //    여기서 핵심은 resourceTypes를 충분히 지정해
+  //    어떤 방법으로든 요청이 나가면 무조건 차단
+  // ------------------------------------------------
+  const BLACKLIST_PATTERNS = [
+    '^https://(.*\\.)?playentry\\.org/signout.*', 
+    '^http://(.*\\.)?playentry\\.org/signout.*',  
+    '^https://(.*\\.)?ncc\\.playentry\\.org/signout.*',
+    '^http://(.*\\.)?ncc\\.playentry\\.org/signout.*'
+  ];
+
   const blacklistRules = BLACKLIST_PATTERNS.map((pattern, index) => ({
     id: 1000 + index,
     priority: 3,
-    action: {
-      type: "block"
-    },
+    action: { type: "block" },
     condition: {
-      resourceTypes: ["sub_frame"],
-      regexFilter: pattern,
-      initiatorDomains: ["playentry.org"]
+      // ↓ 어떤 리소스 타입으로든 차단할지 지정 (필요에 따라 조절)
+      resourceTypes: [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "font",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ],
+      regexFilter: pattern
+      // 굳이 initiatorDomains: ["playentry.org"] 로 제한하면
+      // "playentry.org"에서만 요청할 때만 차단이므로,
+      // 완전 차단을 원하면 이 부분은 빼는게 좋습니다
     }
   }));
 
-  // 모든 규칙 ID를 모아 기존 동일 ID 규칙 제거 후 새 규칙 등록
+  // ------------------------------------------------
+  // 4) 모든 룰을 합쳐서 등록
+  // ------------------------------------------------
   const allRuleIds = [
     blockAllScriptsInIframesRule.id,
     ...allowScriptRules.map(r => r.id),
@@ -240,9 +324,7 @@ chrome.runtime.onInstalled.addListener(() => {
       ]
     },
     () => {
-      console.log(
-        "[Extension] iframe JS 차단 + 화이트리스트 허용 + 블랙리스트 차단 규칙 적용 완료!"
-      );
+      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 ===");
     }
   );
 });
