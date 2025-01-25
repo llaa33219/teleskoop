@@ -147,7 +147,7 @@ function makeDomainRegex(domain) {
 }
 
 /**
- * 2) 화이트리스트 도메인 목록
+ * 2) 화이트리스트 도메인 목록 (전역)
  */
 const WHITELIST_DOMAINS = [
   "bloupla.net",
@@ -228,7 +228,8 @@ chrome.runtime.onInstalled.addListener(() => {
     },
     condition: {
       resourceTypes: ["sub_frame"],
-      initiatorDomains: ["playentry.org"]
+      // [수정] ncc.playentry.org 에서도 iframe 로드 시 동일 규칙 적용
+      initiatorDomains: ["playentry.org", "ncc.playentry.org"]
     }
   };
 
@@ -236,17 +237,8 @@ chrome.runtime.onInstalled.addListener(() => {
   // 2) (예) 화이트리스트(도메인)에서는 CSP를 remove
   //    (원래 쓰시던 rule)
   // ------------------------------------------------
-  const WHITELIST_DOMAINS = [
-    // ...
-    // "bloupla.net", "playentry.org", etc...
-  ];
 
-  function makeDomainRegex(domain) {
-    const escaped = domain.replace(/\./g, "\\.");
-    return `^https?://([^/]*\\.)?${escaped}(/|$)`;
-  }
-  const WHITELIST_PATTERNS = WHITELIST_DOMAINS.map(makeDomainRegex);
-
+  // [중요] 이미 전역에서 WHITELIST_DOMAINS / WHITELIST_PATTERNS 정의했으므로 그대로 사용
   const allowScriptRules = WHITELIST_PATTERNS.map((pattern, idx) => ({
     id: 100 + idx,
     priority: 2,
@@ -259,28 +251,21 @@ chrome.runtime.onInstalled.addListener(() => {
     condition: {
       resourceTypes: ["sub_frame"],
       regexFilter: pattern,
-      initiatorDomains: ["playentry.org"]
+      // [수정] "ncc.playentry.org"도 포함
+      initiatorDomains: ["playentry.org", "ncc.playentry.org"]
     }
   }));
 
   // ------------------------------------------------
   // 3) 블랙리스트 - signout 완전 차단
-  //    여기서 핵심은 resourceTypes를 충분히 지정해
-  //    어떤 방법으로든 요청이 나가면 무조건 차단
   // ------------------------------------------------
-  const BLACKLIST_PATTERNS = [
-    '^https://(.*\\.)?playentry\\.org/signout.*', 
-    '^http://(.*\\.)?playentry\\.org/signout.*',  
-    '^https://(.*\\.)?ncc\\.playentry\\.org/signout.*',
-    '^http://(.*\\.)?ncc\\.playentry\\.org/signout.*'
-  ];
-
+  // 여기서 핵심은 resourceTypes를 충분히 지정해
+  // 어떤 방법으로든 요청이 나가면 무조건 차단
   const blacklistRules = BLACKLIST_PATTERNS.map((pattern, index) => ({
     id: 1000 + index,
     priority: 3,
     action: { type: "block" },
     condition: {
-      // ↓ 어떤 리소스 타입으로든 차단할지 지정 (필요에 따라 조절)
       resourceTypes: [
         "main_frame",
         "sub_frame",
@@ -299,9 +284,7 @@ chrome.runtime.onInstalled.addListener(() => {
         "other"
       ],
       regexFilter: pattern
-      // 굳이 initiatorDomains: ["playentry.org"] 로 제한하면
-      // "playentry.org"에서만 요청할 때만 차단이므로,
-      // 완전 차단을 원하면 이 부분은 빼는게 좋습니다
+      // 완전 차단을 위해 initiatorDomains는 사용 안 함
     }
   }));
 
