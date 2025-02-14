@@ -1,6 +1,10 @@
 // content.js
+
+// ------------------------------------------------------
+// [A] 원본: "엔트리 이야기"를 "엔트리 이야기🔭"로 교체하는 코드
+// (첫 진입 시, 또는 이미 해당 페이지에서 로드되었을 때 동작)
 if (window.location.href.startsWith("https://playentry.org/community/entrystory/")) {
-    // 바꾸고자 하는 새 문구 및 글자 크기 설정
+    // 바꾸고자 하는 새 문구
     const newText = "엔트리 이야기🔭";
 
     function replaceTextAndStyle() {
@@ -34,8 +38,9 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     }
 }
 
+// ------------------------------------------------------
+// [B] 원본: 게시글 내 링크들의 미리보기(이미지, 영상, iframe 등) 처리 로직
 (function() {
-    const processedLinks = new Set();
     let websocketErrorOccurred = false;
 
     // 전역 에러 핸들러 등록 - 웹소켓 에러 감지
@@ -55,7 +60,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             // 도메인별 색상 지정
             if (domain.endsWith("bloupla.net")) return "#0000DD";
             if (domain.endsWith("playentry.org")) return "#00DD00";
-            if (domain.endsWith("firebasestorage.googleapis.com")) return "#0000DD"; // 원래는 #0000DD를 쓰는게 아니라 빨간색으로 해야하는데 다중 이미지 태두리 표기 문제로 인한 임시대처
+            if (domain.endsWith("firebasestorage.googleapis.com")) return "#0000DD"; // 임시대처
             if (domain.endsWith("ifh.cc")) return "#DDDDDD";
             if (domain.endsWith("i1fh.cc")) return "#DDDDDD";
             if (domain.endsWith("if1h.cc")) return "#DDDDDD";
@@ -102,8 +107,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
      * 미리보기 컨테이너를 a 태그 바로 뒤에 삽입
      */
     function insertPreviewContainer(linkElement, finalUrl) {
-        if (!finalUrl || processedLinks.has(finalUrl)) return;
-        processedLinks.add(finalUrl);
+        if (!finalUrl) return; // (기존) finalUrl이 유효하지 않으면 중단
 
         const container = document.createElement('div');
         container.style.width = "100%";
@@ -122,8 +126,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         if (alreadyEmbed) {
             return { type: 'iframe', url: originalUrl };
         }
-    
-        // === [추가/수정] 여기서부터 백그라운드에 단축 URL 확장 요청 후 최종 URL로 처리 ===
+
         return new Promise((resolve) => {
             chrome.runtime.sendMessage(
                 { action: 'resolveUrl', url: originalUrl },
@@ -133,8 +136,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     if (response && response.success && response.finalUrl) {
                         finalUrl = response.finalUrl;
                     }
-    
-                    // http://playentry.org -> https://playentry.org (혼합콘텐츠 방지)
+
+                    // http -> https (혼합콘텐츠 방지)
                     if (finalUrl.startsWith("http://playentry.org/")) {
                         finalUrl = finalUrl.replace("http://playentry.org/", "https://playentry.org/");
                     }
@@ -142,7 +145,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         finalUrl = finalUrl.replace("http://ncc.playentry.org/", "https://ncc.playentry.org/");
                     }
 
-                    // decodeURI로 /%73ignout → /signout 등 인코딩 해제
                     const decodedUrl = decodeURI(finalUrl);
 
                     // signout 경로면 => 차단
@@ -150,11 +152,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'block' });
                         return;
                     }
-    
-                    // 아래부터는 decodedUrl 기준으로 처리
+
                     const urlObj = new URL(decodedUrl);
                     const { hostname, pathname } = urlObj;
-    
+
                     // 1) bloupla.net 다중 링크
                     if (hostname === "bloupla.net") {
                         const blouplaMultiMatch = decodedUrl.match(/^https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
@@ -172,8 +173,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             }
                         }
                     }
-    
-                    // 2) 호스트가 ifh.cc
+
+                    // 2) 호스트 ifh.cc
                     if (hostname === "ifh.cc") {
                         if (pathname.includes("/v-")) {
                             const splitV = pathname.split("/v-");
@@ -205,15 +206,15 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'img', url: decodedUrl });
                         return;
                     }
-    
-                    // ifh.cc 비슷한 도메인들
+
+                    // ifh.cc 계열 도메인
                     const match = decodedUrl.match(
                         /^https?:\/\/(?:i\d*fh\.cc|if\d*h\.cc|ifh\d*\.cc|ifh\.c\d*c|ifh\.\d*cc)\/(v-|i-)([^/?#]+)/
                     );
                     if (match) {
-                        const [, prefix, codePart] = match; // prefix = 'v-' or 'i-', codePart
+                        const [, prefix, codePart] = match; // prefix = 'v-' or 'i-'
                         const toIFH = (c) => `https://ifh.cc/g/${c}`;
-                    
+
                         if (prefix === 'v-') {
                             if (codePart.includes('.')) {
                                 const codes = codePart.split('.');
@@ -221,11 +222,20 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             }
                             return resolve({ type: 'img', url: toIFH(codePart) });
                         }
-                    
-                        // 단일 처리
+                        // i-
                         return resolve({ type: 'img', url: toIFH(codePart) });
-                    }   
-                    
+                    }
+
+                    // ifh.cc /g/ 패턴
+                    const gMatch = decodedUrl.match(
+                        /^https?:\/\/(?:i\d*fh\.cc|if\d*h\.cc|ifh\d*\.cc|ifh\.c\d*c|ifh\.\d*cc)\/g\/([^/?#]+)/
+                    );
+                    if (gMatch) {
+                        const [, codePart] = gMatch;
+                        const toIFH = (c) => `https://ifh.cc/g/${c}`;
+                        return resolve({ type: 'img', url: toIFH(codePart) });
+                    }
+
                     // 7) ibb.co
                     if (hostname === "ibb.co") {
                         const shortCode = pathname.substring(1);
@@ -238,7 +248,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         });
                         return;
                     }
-    
+
                     // i\d*bb.co 등등
                     let ibbMatch = decodedUrl.match(
                         /^https?:\/\/(?:i\d*bb\.co|ib\d*b\.co|ibb\d*\.co|ibb\.\d*co|ibb\.c\d*o)\/([^/]+)$/
@@ -258,7 +268,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         });
                         return;
                     }
-    
+
                     // 8) postimg.cc
                     let postimgMatch = decodedUrl.match(/https?:\/\/postimg\.cc\/([^/]+)$/);
                     if (postimgMatch) {
@@ -284,7 +294,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         });
                         return;
                     }
-    
+
                     // 9) bloupla.net 단일
                     if (hostname === "bloupla.net") {
                         const blouplaMatch = decodedUrl.match(/https?:\/\/bloupla\.net\/img\/\?\=(.+)$/);
@@ -297,7 +307,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             return;
                         }
                     }
-    
+
                     // 기타...
                     let sdfMatch = decodedUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
                     if (sdfMatch) {
@@ -333,15 +343,31 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'iframe', url: `https://space.playentry.org/world/${firstPart}` });
                         return;
                     }
-    
-                    // 유튜브 watch
-                    let youtubeMatch = decodedUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+
+                    // YouTube 모바일 watch (정규식 수정)
+                    let youtubeMobileWatchMatch = decodedUrl.match(/https?:\/\/m\.youtube\.com\/watch\?(?:.*&)?v=([^&]+)/);
+                    if (youtubeMobileWatchMatch) {
+                        const videoId = youtubeMobileWatchMatch[1];
+                        resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                        return;
+                    }
+
+                    // YouTube 모바일 Shorts
+                    let youtubeMobileShortsMatch = decodedUrl.match(/https?:\/\/m\.youtube\.com\/shorts\/([^/?]+)/);
+                    if (youtubeMobileShortsMatch) {
+                        const videoId = youtubeMobileShortsMatch[1];
+                        resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
+                        return;
+                    }
+
+                    // YouTube watch (정규식 수정)
+                    let youtubeMatch = decodedUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:.*&)?v=([^&]+)/);
                     if (youtubeMatch) {
                         const videoId = youtubeMatch[1];
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
                         return;
                     }
-    
+
                     // YouTube Shorts
                     let youtubeShortsMatch = decodedUrl.match(/https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^/?]+)/);
                     if (youtubeShortsMatch) {
@@ -349,7 +375,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
                         return;
                     }
-    
+
                     // 유튜브 단축
                     let youtubeShortMatch = decodedUrl.match(/https?:\/\/youtu\.be\/([^?]+)/);
                     if (youtubeShortMatch) {
@@ -357,7 +383,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'iframe', url: `https://www.youtube.com/embed/${videoId}` });
                         return;
                     }
-    
+
                     // streamable
                     let streamableMatch = decodedUrl.match(/https?:\/\/streamable\.com\/([^&]+)/);
                     if (streamableMatch) {
@@ -365,7 +391,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         resolve({ type: 'iframe', url: `https://streamable.com/e/${videoId}` });
                         return;
                     }
-    
+
                     // playentry project
                     let playentryMatch = decodedUrl.match(/^https?:\/\/playentry\.org\/project\/([^/]+)/);
                     if (playentryMatch) {
@@ -378,12 +404,12 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         return;
                     }
 
-                    // 그 외 도메인은 iframe 처리
+                    // 그 외 도메인 => iframe 처리
                     resolve({ type: 'iframe', url: decodedUrl });
                 }
             );
         });
-    }    
+    }
 
     /**
      * 동영상 태그 생성
@@ -391,9 +417,12 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     function createVideoElement(url, originalUrl, container) {
         const video = document.createElement('video');
         video.setAttribute('data-preview-video', 'true');
+        video.setAttribute('data-original-link', originalUrl);
+        video.setAttribute('data-final-link', url);
+
         video.src = url;
-        video.style.width = "99%";
-        video.style.height = "400px";
+        video.style.maxWidth = "99%";
+        video.style.maxHeight = "400px";
         video.style.border = `2px solid ${getBorderColor(originalUrl)}`;
         video.style.borderRadius = "8px";
         video.style.marginTop = "10px";
@@ -404,14 +433,15 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
     /**
      * 아이프레임 태그 생성
-     * (customHeight가 있으면 해당 값으로 높이를 설정)
      */
     function createIframeElement(url, originalUrl, container, customHeight) {
         const iframe = document.createElement("iframe");
         iframe.setAttribute('data-preview-iframe', 'true');
+        iframe.setAttribute('data-original-link', originalUrl);
+        iframe.setAttribute('data-final-link', url);
+
         iframe.src = url;
         iframe.style.width = "99%";
-        // 여기서 customHeight가 존재하면 그 값으로, 없으면 400px로
         iframe.style.height = customHeight ? customHeight + "px" : "400px";
         iframe.style.border = `2px solid ${getBorderColor(originalUrl)}`;
         iframe.style.borderRadius = "8px";
@@ -444,9 +474,12 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     function createImageElement(url, originalUrl, container) {
         const img = document.createElement('img');
         img.setAttribute('data-preview-img', 'true');
+        img.setAttribute('data-original-link', originalUrl);
+        img.setAttribute('data-final-link', url);
+
         img.src = url;
-        img.style.width = "99%";
-        img.style.height = "400px";
+        img.style.maxWidth = "99%";
+        img.style.maxHeight = "400px";
         img.style.border = `2px solid ${getBorderColor(originalUrl)}`;
         img.style.borderRadius = "8px";
         img.style.marginTop = "10px";
@@ -471,14 +504,13 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     }
 
     /**
-     * 실제로 게시물 내부의 링크들을 순회하며 컨테이너를 삽입하고,
-     * 컨테이너가 뷰포트에 들어오면 URL 변환/미리보기 태그를 생성
+     * 실제로 게시물 내부의 링크들을 순회하며 컨테이너 삽입 & 미리보기
      */
     async function processPosts() {
         const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
         posts.forEach(post => {
             if (!post.dataset.converted) {
-                let foundPreviewLink = false; 
+                let foundPreviewLink = false;
                 const links = post.querySelectorAll("a[href]");
                 links.forEach(link => {
                     if (!link.hasAttribute('href')) return;
@@ -502,11 +534,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     // http:// 또는 https:// 로 시작하면 미리보기 삽입
                     if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
                         insertPreviewContainer(link, finalUrl);
-                        foundPreviewLink = true; 
+                        foundPreviewLink = true;
                     }
                 });
 
-                // 만약 하나라도 미리보기 컨테이너가 생성되었다면 "converted" 처리
                 if (foundPreviewLink) {
                     post.dataset.converted = "true";
                 }
@@ -516,19 +547,25 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         // 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행
         const containers = document.querySelectorAll('div[data-url]');
         for (const container of containers) {
-            // 이미 처리 완료라면 건너뜀
+            // 이미 처리 완료이면 스킵
             if (container.dataset.previewDone === "true") continue;
+            // 처리중이면 스킵(중복처리 방지)
+            if (container.dataset.previewProcessing === "true") continue;
+            
+            container.dataset.previewProcessing = "true";
 
             const originalUrl = container.getAttribute('data-url');
-            if (!isInViewport(container)) continue;
+            if (!isInViewport(container)) {
+                // 뷰포트 밖이면 다음 기회에
+                delete container.dataset.previewProcessing;
+                continue;
+            }
 
             const result = await transformUrlIfNeeded(originalUrl);
 
             // block이면 => signout 차단
             if (result.type === 'block') {
                 container.dataset.previewDone = "true";
-
-                // 컨테이너 앞의 원본 링크도 제거
                 const prev = container.previousElementSibling;
                 if (prev && prev.tagName === 'A') {
                     prev.remove();
@@ -540,12 +577,14 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (result.type === 'multiple-img') {
                 // 다중 이미지
                 for (let singleUrl of result.urls) {
-                    createImageElement(singleUrl, singleUrl, container);
+                    createImageElement(singleUrl, originalUrl, container);
+                    const br = document.createElement('br');
+                    container.appendChild(br);
                 }
                 container.dataset.previewDone = "true";
             } else {
                 // 단일 항목
-                const { type, url } = result;
+                const { type, url, customHeight } = result;
                 container.setAttribute('data-url', url);
 
                 const existingElement = container.querySelector('[data-preview-img],[data-preview-video],[data-preview-iframe]');
@@ -555,17 +594,67 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     } else if (type === 'video') {
                         createVideoElement(url, originalUrl, container);
                     } else {
-                        // ★ 추가: playentry project인 경우 customHeight가 있을 수 있으니 함께 전달
-                        createIframeElement(url, originalUrl, container, result.customHeight);
+                        createIframeElement(url, originalUrl, container, customHeight);
                     }
                 }
                 container.dataset.previewDone = "true";
             }
+
+            delete container.dataset.previewProcessing;
         }
     }
 
     // 주기적으로 게시물 내부를 탐색하여 새로 추가된 링크 등을 업데이트
     setInterval(() => {
         processPosts();
+    }, 500);
+})();
+
+// ------------------------------------------------------
+// [C] 추가 로직: "새로고침 없이" URL이 바뀌어도, community/entrystory 페이지라면
+//               위 [A]의 "엔트리 이야기🔭" 치환 기능이 재적용되도록 감시
+(function() {
+    let lastUrl = window.location.href;
+
+    setInterval(() => {
+        // URL이 변경되었는지 체크
+        if (window.location.href !== lastUrl) {
+            lastUrl = window.location.href;
+
+            // 변경된 URL이 "community/entrystory/"로 시작한다면 제목 치환 재실행
+            if (lastUrl.startsWith("https://playentry.org/community/entrystory/")) {
+                // 아래는 [A]의 코드와 동일
+                const newText = "엔트리 이야기🔭";
+
+                function replaceTextAndStyle() {
+                    const headers = document.querySelectorAll("h2");
+                    let changed = false;
+                    headers.forEach((header) => {
+                        const text = header.textContent.trim();
+                        if (text === "엔트리 이야기") {
+                            header.textContent = newText;
+                            changed = true;
+                        }
+                    });
+                    return changed;
+                }
+
+                // 초기 시도
+                let changed = replaceTextAndStyle();
+
+                // 아직 변경되지 않았다면 DOM 변화 관찰
+                if (!changed) {
+                    const observer = new MutationObserver(() => {
+                        if (replaceTextAndStyle()) {
+                            observer.disconnect();
+                        }
+                    });
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+            }
+        }
     }, 500);
 })();
