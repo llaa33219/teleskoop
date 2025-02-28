@@ -84,6 +84,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (domain.endsWith("ibb.c1o")) return "#50bcdf";
             if (domain.endsWith("snowman.quizby.me")) return "#D2E4F5";
             if (domain.endsWith("quizby.me")) return "#E9E7E1";
+            if (domain.endsWith("img.bloupla.net")) return "#0000DD";
             return "black";
         } catch (e) {
             return "black";
@@ -133,7 +134,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                 (response) => {
                     // 백그라운드에서 확장된 최종 주소
                     let finalUrl = originalUrl;
-                    if (response && response.success && response.finalUrl) {
+                    // 응답이 "/"인 경우는 무시하고 originalUrl을 그대로 사용
+                    if (response && response.success && response.finalUrl && response.finalUrl !== "/") {
                         finalUrl = response.finalUrl;
                     }
 
@@ -153,7 +155,19 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         return;
                     }
 
-                    const urlObj = new URL(decodedUrl);
+                    let urlObj;
+                    try {
+                        // 만약 decodedUrl이 절대 URL이 아니라면 window.location.origin을 기본값으로 사용
+                        if (!/^https?:\/\//.test(decodedUrl)) {
+                            urlObj = new URL(decodedUrl, window.location.origin);
+                        } else {
+                            urlObj = new URL(decodedUrl);
+                        }
+                    } catch (e) {
+                        console.error("Invalid URL encountered:", decodedUrl, e);
+                        resolve({ type: 'iframe', url: decodedUrl });
+                        return;
+                    }
                     const { hostname, pathname } = urlObj;
 
                     // 1) bloupla.net 다중 링크
@@ -401,6 +415,13 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             url: `https://bloupla.net/project-preview/?=https://playentry.org/project/${projectId}`,
                             customHeight: 395
                         });
+                        return;
+                    }
+
+                    // img.bloupla.net
+                    let blouplaImgMatch = decodedUrl.match(/^https?:\/\/img\.bloupla\.net\/([^&]+)/);
+                    if (blouplaImgMatch) {
+                        resolve({ type: 'img', url: `${decodedUrl}?raw=1` });
                         return;
                     }
 

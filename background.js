@@ -184,7 +184,8 @@ const WHITELIST_DOMAINS = [
   "streamable.com",
   "dutmoticon.tica.fun",
   "musiclab.chromeexperiments.com",
-  "bbbi.onrender.com"
+  "bbbi.onrender.com",
+  "img.bloupla.net"
 ];
 
 // 화이트리스트 도메인들을 정규식 배열로 변환
