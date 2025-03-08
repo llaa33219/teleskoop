@@ -185,7 +185,8 @@ const WHITELIST_DOMAINS = [
   "dutmoticon.tica.fun",
   "musiclab.chromeexperiments.com",
   "bbbi.onrender.com",
-  "img.bloupla.net"
+  "img.bloupla.net",
+  "img-next.pages.dev"
 ];
 
 // 화이트리스트 도메인들을 정규식 배열로 변환
@@ -290,12 +291,26 @@ chrome.runtime.onInstalled.addListener(() => {
   }));
 
   // ------------------------------------------------
-  // 4) 모든 룰을 합쳐서 등록
+  // 4) [새로 추가] 블랙리스트 예외 - 직접 방문(main_frame) 허용
+  // ------------------------------------------------
+  const blacklistExceptionRules = BLACKLIST_PATTERNS.map((pattern, index) => ({
+    id: 2000 + index,
+    priority: 4, // 더 높은 우선순위로 설정
+    action: { type: "allow" },
+    condition: {
+      resourceTypes: ["main_frame"], // 직접 방문(main_frame)만 허용
+      regexFilter: pattern
+    }
+  }));
+
+  // ------------------------------------------------
+  // 5) 모든 룰을 합쳐서 등록
   // ------------------------------------------------
   const allRuleIds = [
     blockAllScriptsInIframesRule.id,
     ...allowScriptRules.map(r => r.id),
-    ...blacklistRules.map(r => r.id)
+    ...blacklistRules.map(r => r.id),
+    ...blacklistExceptionRules.map(r => r.id) // 추가
   ];
 
   chrome.declarativeNetRequest.updateDynamicRules(
@@ -304,11 +319,12 @@ chrome.runtime.onInstalled.addListener(() => {
       addRules: [
         blockAllScriptsInIframesRule,
         ...allowScriptRules,
-        ...blacklistRules
+        ...blacklistRules,
+        ...blacklistExceptionRules // 추가
       ]
     },
     () => {
-      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 ===");
+      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 (직접 방문 제외) ===");
     }
   );
 });
