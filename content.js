@@ -699,7 +699,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
      */
     async function processPosts() {
         // 1. 메인 페이지의 게시물 처리
-        const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1, .css-1kch7gj.eucbbj23, .se-main-container");
+        const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1, .css-1kch7gj.eucbbj23, .css-otqagu.e1xezhfw0");
         posts.forEach(post => {
             if (!post.dataset.converted) {
                 let foundPreviewLink = false;
