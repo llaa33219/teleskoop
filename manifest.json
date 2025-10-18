@@ -5,8 +5,7 @@
   "manifest_version": 3,
   "permissions": [
     "declarativeNetRequest",
-    "declarativeNetRequestWithHostAccess",
-    "scripting"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://ibb.co/*",
@@ -43,4 +42,5 @@
       "matches": ["<all_urls>"]
     }
   ]
+
 }
