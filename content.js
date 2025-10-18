@@ -86,6 +86,14 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (domain.endsWith("quizby.me")) return "#E9E7E1";
             if (domain.endsWith("img.bloupla.net")) return "#0000DD";
             if (domain.endsWith("img-next.pages.dev")) return "#0000DD";
+            if (domain.endsWith("xn--0p4b.xn--3e0b707e")) return "#4b5ae4";
+            if (domain.endsWith("link.naver.com")) return "#00DD00";
+            if (domain.endsWith("www.bapsang.co.kr")) return "#FFA500";
+            if (domain.endsWith("uzu.kr")) return "#0088C5";
+            if (domain.endsWith("qaa.kr")) return "#0088C5";
+            if (domain.endsWith("enn.kr")) return "#0088C5";
+            if (domain.endsWith("entrywiki.org")) return "#009954";
+            if (domain.endsWith("xn--9q5b29o.xn--h32bi4v.xn--3e0b707e")) return "#009954";
             return "black";
         } catch (e) {
             return "black";
@@ -158,12 +166,17 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
 
                     let urlObj;
                     try {
-                        // 만약 decodedUrl이 절대 URL이 아니라면 window.location.origin을 기본값으로 사용
+                        // 프로토콜이 없는 URL이면 https:// 자동 추가
                         if (!/^https?:\/\//.test(decodedUrl)) {
-                            urlObj = new URL(decodedUrl, window.location.origin);
-                        } else {
-                            urlObj = new URL(decodedUrl);
+                            // 슬래시로 시작하는 경우(절대경로)나 상대경로가 아닌 일반 도메인인 경우 https 추가
+                            if (!decodedUrl.startsWith('/') && decodedUrl.includes('.')) {
+                                decodedUrl = 'https://' + decodedUrl;
+                            } else {
+                                // 실제 상대 경로인 경우에만 origin 사용
+                                decodedUrl = new URL(decodedUrl, window.location.origin).href;
+                            }
                         }
+                        urlObj = new URL(decodedUrl);
                     } catch (e) {
                         console.error("Invalid URL encountered:", decodedUrl, e);
                         resolve({ type: 'iframe', url: decodedUrl });
@@ -219,6 +232,13 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             return;
                         }
                         resolve({ type: 'img', url: decodedUrl });
+                        return;
+                    }
+
+                    // 3) i.ifh.cc
+                    if (hostname === "i.ifh.cc") {
+                        const codePart = pathname.substring(1);
+                        resolve({ type: 'img', url: `https://ifh.cc/g/${codePart}` });
                         return;
                     }
 
@@ -476,6 +496,10 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         video.style.borderRadius = "8px";
         video.style.marginTop = "10px";
         video.style.backgroundColor = "#fff";
+        video.style.display = "block";
+        video.style.position = "relative";
+        video.style.zIndex = "1";
+        video.style.pointerEvents = "auto";
         video.controls = true;
         container.appendChild(video);
     }
@@ -496,6 +520,8 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         iframe.style.borderRadius = "8px";
         iframe.style.marginTop = "10px";
         iframe.style.backgroundColor = "#fff";
+        iframe.style.position = "relative";
+        iframe.style.zIndex = "10";
 
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
@@ -553,10 +579,127 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
     }
 
     /**
+     * [신규] iframe 내의 링크 처리를 위한 함수
+     */
+    function processIframeLinks(iframe) {
+        try {
+            // 동일 출처(same-origin) 정책 때문에 다른 도메인 iframe 내부 접근 불가
+            // 안전하게 try-catch로 감싸고 접근 가능한 경우만 처리
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            // iframe 내의 링크 검색
+            const links = iframeDoc.querySelectorAll("a[href]");
+            links.forEach(link => {
+                // 기존 처리 로직 적용
+                if (!link.hasAttribute('href')) return;
+                const hrefValue = link.getAttribute('href');
+                if (!hrefValue) return;
+
+                // 이미 처리된 링크는 건너뜀
+                if (link.hasAttribute('data-preview-processed')) return;
+
+                // data-linktype="oglink" 감지
+                if (link.getAttribute('data-linktype') === 'oglink') {
+                    const parent = link.parentElement;
+                    if (parent) {
+                        const siblingLinks = parent.querySelectorAll('a[href]');
+                        if (siblingLinks.length === 2) {
+                            // 2개의 링크가 있는 경우
+                            let linkWithImg = null;
+                            let otherLink = null;
+                            
+                            siblingLinks.forEach(sLink => {
+                                if (sLink.querySelector('img')) {
+                                    linkWithImg = sLink;
+                                } else {
+                                    otherLink = sLink;
+                                }
+                            });
+
+                            // img를 포함한 링크에서 img 제거
+                            if (linkWithImg) {
+                                const imgInside = linkWithImg.querySelector('img');
+                                if (imgInside) {
+                                    imgInside.remove();
+                                }
+                                
+                                // img가 있던 링크만 처리
+                                linkWithImg.setAttribute('data-preview-processed', 'true');
+                                const redirectMatch = linkWithImg.getAttribute('href').match(/^\/redirect\/?\?external=(.+)$/);
+                                let finalUrl = null;
+
+                                if (redirectMatch) {
+                                    try {
+                                        finalUrl = decodeURIComponent(redirectMatch[1]);
+                                    } catch {
+                                        finalUrl = redirectMatch[1];
+                                    }
+                                } else {
+                                    finalUrl = new URL(linkWithImg.getAttribute('href'), iframe.src).href;
+                                }
+
+                                if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+                                    insertPreviewContainer(linkWithImg, finalUrl);
+                                }
+                            }
+
+                            // 나머지 링크는 처리 완료만 표시
+                            if (otherLink) {
+                                otherLink.setAttribute('data-preview-processed', 'true');
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                link.setAttribute('data-preview-processed', 'true');
+
+                // /redirect?external=... 또는 /redirect/?external=... 구조
+                const redirectMatch = hrefValue.match(/^\/redirect\/?\?external=(.+)$/);
+                let finalUrl = null;
+
+                if (redirectMatch) {
+                    try {
+                        finalUrl = decodeURIComponent(redirectMatch[1]);
+                    } catch {
+                        finalUrl = redirectMatch[1];
+                    }
+                } else {
+                    // 상대 경로를 절대 경로로 변환
+                    finalUrl = new URL(hrefValue, iframe.src).href;
+                }
+
+                // http:// 또는 https:// 로 시작하면 미리보기 삽입
+                if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+                    insertPreviewContainer(link, finalUrl);
+                }
+            });
+
+            // 변경 감지를 위한 MutationObserver 설정
+            if (!iframe.iframeObserver) {
+                const observer = new MutationObserver(() => {
+                    processIframeLinks(iframe);
+                });
+                
+                observer.observe(iframeDoc.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                iframe.iframeObserver = observer;
+            }
+        } catch (error) {
+            // 크로스 도메인 iframe은 접근 불가 - 오류 무시
+            console.log("Cannot access iframe content due to same-origin policy:", error);
+        }
+    }
+
+    /**
      * 실제로 게시물 내부의 링크들을 순회하며 컨테이너 삽입 & 미리보기
      */
     async function processPosts() {
-        const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1");
+        // 1. 메인 페이지의 게시물 처리
+        const posts = document.querySelectorAll(".css-6wq60h.e1i41bku1, .css-1kch7gj.eucbbj23, .se-main-container");
         posts.forEach(post => {
             if (!post.dataset.converted) {
                 let foundPreviewLink = false;
@@ -566,8 +709,68 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                     const hrefValue = link.getAttribute('href');
                     if (!hrefValue) return;
 
-                    // /redirect?external=... 구조
-                    const redirectMatch = hrefValue.match(/^\/redirect\?external=(.+)$/);
+                    // 이미 처리된 링크는 건너뜀
+                    if (link.hasAttribute('data-preview-processed')) return;
+
+                    // data-linktype="oglink" 감지
+                    if (link.getAttribute('data-linktype') === 'oglink') {
+                        const parent = link.parentElement;
+                        if (parent) {
+                            const siblingLinks = parent.querySelectorAll('a[href]');
+                            if (siblingLinks.length === 2) {
+                                // 2개의 링크가 있는 경우
+                                let linkWithImg = null;
+                                let otherLink = null;
+                                
+                                siblingLinks.forEach(sLink => {
+                                    if (sLink.querySelector('img')) {
+                                        linkWithImg = sLink;
+                                    } else {
+                                        otherLink = sLink;
+                                    }
+                                });
+
+                                // img를 포함한 링크에서 img 제거
+                                if (linkWithImg) {
+                                    const imgInside = linkWithImg.querySelector('img');
+                                    if (imgInside) {
+                                        imgInside.remove();
+                                    }
+                                    
+                                    // img가 있던 링크만 처리
+                                    linkWithImg.setAttribute('data-preview-processed', 'true');
+                                    const redirectMatch = linkWithImg.getAttribute('href').match(/^\/redirect\/?\?external=(.+)$/);
+                                    let finalUrl = null;
+
+                                    if (redirectMatch) {
+                                        try {
+                                            finalUrl = decodeURIComponent(redirectMatch[1]);
+                                        } catch {
+                                            finalUrl = redirectMatch[1];
+                                        }
+                                    } else {
+                                        finalUrl = linkWithImg.getAttribute('href');
+                                    }
+
+                                    if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+                                        insertPreviewContainer(linkWithImg, finalUrl);
+                                        foundPreviewLink = true;
+                                    }
+                                }
+
+                                // 나머지 링크는 처리 완료만 표시
+                                if (otherLink) {
+                                    otherLink.setAttribute('data-preview-processed', 'true');
+                                }
+                                return;
+                            }
+                        }
+                    }
+
+                    link.setAttribute('data-preview-processed', 'true');
+
+                    // /redirect?external=... 또는 /redirect/?external=... 구조
+                    const redirectMatch = hrefValue.match(/^\/redirect\/?\?external=(.+)$/);
                     let finalUrl = null;
 
                     if (redirectMatch) {
@@ -593,7 +796,26 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             }
         });
 
-        // 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행
+        // 2. [새로 추가] 페이지 내 모든 iframe 검색 및 처리
+        const allIframes = document.querySelectorAll('iframe');
+        allIframes.forEach(iframe => {
+            // 이미 처리된 iframe은 건너뜀
+            if (iframe.hasAttribute('data-links-processed')) return;
+            
+            // iframe이 로드된 후에만 내부 링크 처리
+            if (iframe.contentDocument) {
+                processIframeLinks(iframe);
+                iframe.setAttribute('data-links-processed', 'true');
+            } else {
+                // 아직 로드되지 않은 iframe은 load 이벤트 추가
+                iframe.addEventListener('load', () => {
+                    processIframeLinks(iframe);
+                    iframe.setAttribute('data-links-processed', 'true');
+                });
+            }
+        });
+
+        // 3. 이제 미리보기 컨테이너들에 대해 실제 변환 로직 수행
         const containers = document.querySelectorAll('div[data-url]');
         for (const container of containers) {
             // 이미 처리 완료이면 스킵
@@ -653,10 +875,43 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
         }
     }
 
-    // 주기적으로 게시물 내부를 탐색하여 새로 추가된 링크 등을 업데이트
+    // 4. [변경] 주기적 처리 간격 (iframe 검색으로 인한 부하 감소를 위해 약간 늘림)
     setInterval(() => {
         processPosts();
-    }, 500);
+    }, 800);
+
+    // 5. [신규] 새로운 iframe이 동적으로 추가될 때 감지하여 처리
+    const documentObserver = new MutationObserver((mutations) => {
+        mutations.forEach(mutation => {
+            mutation.addedNodes.forEach(node => {
+                // iframe이 추가된 경우
+                if (node.nodeName === 'IFRAME') {
+                    node.addEventListener('load', () => {
+                        processIframeLinks(node);
+                    });
+                }
+                
+                // 부모 노드에 iframe이 포함된 경우
+                if (node.nodeType === 1) { // Element 노드
+                    const iframes = node.querySelectorAll('iframe');
+                    iframes.forEach(iframe => {
+                        if (!iframe.hasAttribute('data-links-processed')) {
+                            iframe.addEventListener('load', () => {
+                                processIframeLinks(iframe);
+                                iframe.setAttribute('data-links-processed', 'true');
+                            });
+                        }
+                    });
+                }
+            });
+        });
+    });
+
+    // 전체 문서에 대해 iframe 추가 감지
+    documentObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 })();
 
 // ------------------------------------------------------

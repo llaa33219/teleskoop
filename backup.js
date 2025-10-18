@@ -85,6 +85,7 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
             if (domain.endsWith("snowman.quizby.me")) return "#D2E4F5";
             if (domain.endsWith("quizby.me")) return "#E9E7E1";
             if (domain.endsWith("img.bloupla.net")) return "#0000DD";
+            if (domain.endsWith("img-next.pages.dev")) return "#0000DD";
             return "black";
         } catch (e) {
             return "black";
@@ -322,6 +323,40 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                         }
                     }
 
+                    // img.bloupla.net (수정: 다중 이미지 지원 추가)
+                    let blouplaImgMatch = decodedUrl.match(/^https?:\/\/img\.bloupla\.net\/([^&]+)/);
+                    if (blouplaImgMatch) {
+                        const imgCode = blouplaImgMatch[1];
+                        if (imgCode.includes(',')) {
+                            // 다중 이미지 처리 - 콤마로 구분된 이미지 코드
+                            const imgCodes = imgCode.split(',');
+                            const finalUrls = imgCodes.map(code => `https://img.bloupla.net/${code}?raw=1`);
+                            resolve({ type: 'multiple-img', urls: finalUrls });
+                            return;
+                        } else {
+                            // 단일 이미지
+                            resolve({ type: 'img', url: `${decodedUrl}?raw=1` });
+                            return;
+                        }
+                    }
+
+                    // img.bloupla.net (수정: 다중 이미지 지원 추가)
+                    let nextImgMatch = decodedUrl.match(/^https?:\/\/img-next\.pages\.dev\/([^&]+)/);
+                    if (nextImgMatch) {
+                        const imgCode = nextImgMatch[1];
+                        if (imgCode.includes(',')) {
+                            // 다중 이미지 처리 - 콤마로 구분된 이미지 코드
+                            const imgCodes = imgCode.split(',');
+                            const finalUrls = imgCodes.map(code => `https://img.bloupla.net/${code}?raw=1`);
+                            resolve({ type: 'multiple-img', urls: finalUrls });
+                            return;
+                        } else {
+                            // 단일 이미지
+                            resolve({ type: 'img', url: `${decodedUrl}?raw=1` });
+                            return;
+                        }
+                    }
+
                     // 기타...
                     let sdfMatch = decodedUrl.match(/^https?:\/\/lemmy\.sdf\.org\/pictrs\/image\/(.+)/);
                     if (sdfMatch) {
@@ -415,13 +450,6 @@ if (window.location.href.startsWith("https://playentry.org/community/entrystory/
                             url: `https://bloupla.net/project-preview/?=https://playentry.org/project/${projectId}`,
                             customHeight: 395
                         });
-                        return;
-                    }
-
-                    // img.bloupla.net
-                    let blouplaImgMatch = decodedUrl.match(/^https?:\/\/img\.bloupla\.net\/([^&]+)/);
-                    if (blouplaImgMatch) {
-                        resolve({ type: 'img', url: `${decodedUrl}?raw=1` });
                         return;
                     }
 

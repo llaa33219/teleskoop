@@ -186,7 +186,11 @@ const WHITELIST_DOMAINS = [
   "musiclab.chromeexperiments.com",
   "bbbi.onrender.com",
   "img.bloupla.net",
-  "img-next.pages.dev"
+  "img-next.pages.dev",
+  "link.naver.com",
+  "www.bapsang.co.kr",
+  "entrywiki.org",
+  "xn--9q5b29o.xn--h32bi4v.xn--3e0b707e"
 ];
 
 // 화이트리스트 도메인들을 정규식 배열로 변환
@@ -304,13 +308,63 @@ chrome.runtime.onInstalled.addListener(() => {
   }));
 
   // ------------------------------------------------
-  // 5) 모든 룰을 합쳐서 등록
+  // 5) [신규] iframe 내 모든 도메인에서의 iframe 허용
+  // ------------------------------------------------
+  const allowNestedIframesRule = {
+    id: 3000,
+    priority: 5,
+    action: {
+      type: "modifyHeaders",
+      responseHeaders: [
+        {
+          header: "X-Frame-Options",
+          operation: "remove"
+        }
+      ]
+    },
+    condition: {
+      resourceTypes: ["sub_frame"],
+      initiatorDomains: WHITELIST_DOMAINS
+    }
+  };
+
+  // ------------------------------------------------
+  // 6) [신규] iframe 내에서 외부 리소스 로드 허용
+  // ------------------------------------------------
+  const allowCrossOriginRule = {
+    id: 3001,
+    priority: 5,
+    action: {
+      type: "modifyHeaders",
+      responseHeaders: [
+        {
+          header: "Access-Control-Allow-Origin",
+          operation: "set",
+          value: "*"
+        },
+        {
+          header: "Access-Control-Allow-Methods",
+          operation: "set",
+          value: "GET, POST, OPTIONS"
+        }
+      ]
+    },
+    condition: {
+      resourceTypes: ["sub_frame", "script", "image", "stylesheet", "font", "media"],
+      initiatorDomains: WHITELIST_DOMAINS
+    }
+  };
+
+  // ------------------------------------------------
+  // 7) 모든 룰을 합쳐서 등록
   // ------------------------------------------------
   const allRuleIds = [
     blockAllScriptsInIframesRule.id,
     ...allowScriptRules.map(r => r.id),
     ...blacklistRules.map(r => r.id),
-    ...blacklistExceptionRules.map(r => r.id) // 추가
+    ...blacklistExceptionRules.map(r => r.id),
+    allowNestedIframesRule.id,
+    allowCrossOriginRule.id
   ];
 
   chrome.declarativeNetRequest.updateDynamicRules(
@@ -320,11 +374,13 @@ chrome.runtime.onInstalled.addListener(() => {
         blockAllScriptsInIframesRule,
         ...allowScriptRules,
         ...blacklistRules,
-        ...blacklistExceptionRules // 추가
+        ...blacklistExceptionRules,
+        allowNestedIframesRule,
+        allowCrossOriginRule
       ]
     },
     () => {
-      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 (직접 방문 제외) ===");
+      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 (직접 방문 제외) 및 iframe 지원 추가 ===");
     }
   );
 });
