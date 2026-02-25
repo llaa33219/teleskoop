@@ -356,7 +356,41 @@ chrome.runtime.onInstalled.addListener(() => {
   };
 
   // ------------------------------------------------
-  // 7) 모든 룰을 합쳐서 등록
+  // 7) [신규] SVG 스크립트 실행 차단 규칙
+  // ------------------------------------------------
+  const blockSvgScriptsCspRule = {
+    id: 4000,
+    priority: 10,
+    action: {
+      type: "modifyHeaders",
+      responseHeaders: [
+        {
+          header: "Content-Security-Policy",
+          operation: "set",
+          value: "script-src 'none'; object-src 'none';"
+        }
+      ]
+    },
+    condition: {
+      regexFilter: ".*\\.svg(\\?.*)?$",
+      requestDomains: ["playentry.org"],
+      resourceTypes: ["sub_frame", "image", "object", "xmlhttprequest", "other"]
+    }
+  };
+
+  const blockSvgAsScriptRule = {
+    id: 4001,
+    priority: 10,
+    action: { type: "block" },
+    condition: {
+      regexFilter: ".*\\.svg(\\?.*)?$",
+      resourceTypes: ["script"],
+      initiatorDomains: ["playentry.org"]
+    }
+  };
+
+  // ------------------------------------------------
+  // 8) 모든 룰을 합쳐서 등록
   // ------------------------------------------------
   const allRuleIds = [
     blockAllScriptsInIframesRule.id,
@@ -364,7 +398,9 @@ chrome.runtime.onInstalled.addListener(() => {
     ...blacklistRules.map(r => r.id),
     ...blacklistExceptionRules.map(r => r.id),
     allowNestedIframesRule.id,
-    allowCrossOriginRule.id
+    allowCrossOriginRule.id,
+    blockSvgScriptsCspRule.id,
+    blockSvgAsScriptRule.id
   ];
 
   chrome.declarativeNetRequest.updateDynamicRules(
@@ -376,11 +412,13 @@ chrome.runtime.onInstalled.addListener(() => {
         ...blacklistRules,
         ...blacklistExceptionRules,
         allowNestedIframesRule,
-        allowCrossOriginRule
+        allowCrossOriginRule,
+        blockSvgScriptsCspRule,
+        blockSvgAsScriptRule
       ]
     },
     () => {
-      console.log("=== DNR 규칙 적용 완료: signout 100% 차단 (직접 방문 제외) 및 iframe 지원 추가 ===");
+      console.log("=== DNR 규칙 적용 완료: signout 차단, iframe 지원, SVG 스크립트 차단 ===");
     }
   );
 });
